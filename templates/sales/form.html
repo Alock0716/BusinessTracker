@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if sale else 'Record' }} Sale{% endblock %}
+{% block heading %}{{ 'Edit' if sale else 'Record' }} Sale{% endblock %}
+{% block content %}
+<form method="post" class="panel form sale-form" id="saleForm">
+  <div class="sale-header-grid">
+    <label>Date
+      <input type="datetime-local" name="sale_date" value="{{ now }}">
+    </label>
+    <label>Buyer Name
+      <input name="customer_name" value="{{ sale.customer.name if sale and sale.customer else '' }}" placeholder="Optional">
+    </label>
+    <label>Platform
+      <select name="platform_id">
+        <option value="">None</option>
+        {% for x in platforms %}<option value="{{ x.id }}" {% if sale and sale.platform_id == x.id %}selected{% endif %}>{{ x.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Payment
+      <select name="payment_method_id">
+        <option value="">None</option>
+        {% for x in payments %}<option value="{{ x.id }}" {% if sale and sale.payment_method_id == x.id %}selected{% endif %}>{{ x.name }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <label>Gift Card / Exchange Details
+    <input name="payment_detail" value="{{ sale.payment_detail if sale else '' }}" placeholder="Optional">
+  </label>
+
+  <div class="section-heading">
+    <div>
+      <h2>Items</h2>
+      <p class="muted">Choose a product, then expand its options to select pricing, add-ons, and trackable information.</p>
+    </div>
+  </div>
+
+  <div id="items" class="sale-items"></div>
+
+  <button type="button" class="secondary button add-item-button" onclick="addItem()">+ Add Item</button>
+
+  <label>Notes
+    <textarea name="notes">{{ sale.notes if sale else '' }}</textarea>
+  </label>
+
+  <div class="actions">
+    <button class="button">{{ 'Save Changes' if sale else 'Save Sale' }}</button>
+    <a class="button secondary" href="{{ url_for('sales') }}">Cancel</a>
+  </div>
+</form>
+
+<script>
+const productData = {{ product_data | tojson | safe }};
+const selectedItems = {{ selected_items | tojson | safe }};
+let itemCount = 0;
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+
+function addItem(saved = null) {
+  const i = itemCount++;
+  const div = document.createElement('div');
+  div.className = 'sale-item-card';
+  div.dataset.index = i;
+
+  div.innerHTML = `
+    <div class="sale-item-main">
+      <div class="sale-product">
+        <label>Product
+          <select name="product_id" onchange="refreshItem(this)" required>
+            <option value="">Select product</option>
+            {% for p in products %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>Qty
+          <input name="quantity" type="number" step="0.01" min="0" value="1">
+        </label>
+      </div>
+      <div>
+        <label>Unit Price
+          <input name="unit_price" type="number" step="0.01" min="0" placeholder="Price">
+        </label>
+      </div>
+      <div>
+        <label>Labor Hrs
+          <input name="labor_hours" type="number" step="0.01" min="0" value="0">
+        </label>
+      </div>
+      <div class="sale-remove-wrap">
+        <button type="button" class="button secondary danger sale-remove" onclick="this.closest('.sale-item-card').remove()">Remove</button>
+      </div>
+    </div>
+    <div class="item-options" hidden></div>`;
+
+  document.getElementById('items').appendChild(div);
+
+  if (saved) {
+    const select = div.querySelector('[name="product_id"]');
+    select.value = saved.product_id;
+    div.querySelector('[name="quantity"]').value = saved.quantity ?? 1;
+    refreshItem(select, saved);
+  }
+}
+
+function refreshItem(select, saved = null) {
+  const card = select.closest('.sale-item-card');
+  const data = productData[select.value];
+  const options = card.querySelector('.item-options');
+
+  if (!data) {
+    options.hidden = true;
+    options.innerHTML = '';
+    return;
+  }
+
+  card.querySelector('[name="unit_price"]').value = saved?.unit_price ?? data.price ?? 0;
+  card.querySelector('[name="labor_hours"]').value = saved?.labor_hours ?? 0;
+
+  const hasOptions = data.bundles.length || data.addons.length || data.fields.length;
+  if (!hasOptions) {
+    options.hidden = true;
+    options.innerHTML = '';
+    return;
+  }
+
+  let html = '<div class="options-panel">';
+  html += '<div class="options-panel-header"><strong>Product Options</strong><span>Select any applicable options below.</span></div>';
+
+  if (data.bundles.length) {
+    html += `<div class="option-section">
+      <label>Pricing Option
+        <select name="bundle_id" class="option-control">
+          <option value="">Base price</option>
+          ${data.bundles.map(b => `<option value="${b.id}" data-price="${esc(b.price)}" data-labor="${esc(b.labor)}">${esc(b.name)} — ${esc(b.amount)} ${esc(b.unit)} — $${Number(b.price).toFixed(2)}</option>`).join('')}
+        </select>
+      </label>
+    </div>`;
+  }
+
+  if (data.addons.length) {
+    html += `<div class="option-section">
+      <div class="option-section-title">Add-ons</div>
+      <div class="addon-list">
+        ${data.addons.map(a => `
+          <div class="addon-row">
+            <label class="addon-check">
+              <input type="checkbox" name="addon_id_${card.dataset.index}" value="${a.id}" data-price="${esc(a.price)}" data-labor="${esc(a.labor)}">
+              <span><strong>${esc(a.name)}</strong>${a.description ? `<small>${esc(a.description)}</small>` : ''}</span>
+            </label>
+            <span class="addon-meta">+$${Number(a.price).toFixed(2)} · +${Number(a.labor || 0).toFixed(2)} hrs</span>
+            <input name="addon_quantity_${card.dataset.index}_${a.id}" class="addon-qty" type="number" step="0.01" min="0" value="1" aria-label="${esc(a.name)} quantity">
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (data.fields.length) {
+    html += `<div class="option-section">
+      <div class="option-section-title">Trackable Information</div>
+      <div class="trackable-grid">
+        ${data.fields.map(f => `
+          <label>${esc(f.name)}${f.required ? ' *' : ''}
+            <input name="field_value_${card.dataset.index}" type="${f.type === 'decimal' || f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}" ${f.type === 'decimal' || f.type === 'number' ? 'step="0.01"' : ''} placeholder="${esc(f.unit)}">
+            <input type="hidden" name="field_id_${card.dataset.index}" value="${f.id}">
+          </label>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  html += '</div>';
+  options.innerHTML = html;
+  options.hidden = false;
+
+  const bundle = options.querySelector('[name="bundle_id"]');
+  if (bundle) {
+    bundle.addEventListener('change', () => {
+      const o = bundle.options[bundle.selectedIndex];
+      card.querySelector('[name="unit_price"]').value = o.dataset.price || data.price || 0;
+      card.querySelector('[name="labor_hours"]').value = o.dataset.labor || 0;
+    });
+  }
+
+  if (saved) {
+    if (bundle) {
+      bundle.value = saved.bundle_id || '';
+      if (saved.bundle_id) bundle.dispatchEvent(new Event('change'));
+    }
+
+    const fieldValues = options.querySelectorAll('input[name^="field_value_"]');
+    const fieldIds = options.querySelectorAll('input[name^="field_id_"]');
+    fieldValues.forEach((el, j) => {
+      const fid = fieldIds[j]?.value;
+      if (fid && saved.fields?.[fid] !== undefined) el.value = saved.fields[fid];
+    });
+
+    options.querySelectorAll(`input[type="checkbox"][name="addon_id_${card.dataset.index}"]`).forEach(cb => {
+      if (saved.addons?.[cb.value] !== undefined) {
+        cb.checked = true;
+        const qty = options.querySelector(`[name="addon_quantity_${card.dataset.index}_${cb.value}"]`);
+        if (qty) qty.value = saved.addons[cb.value];
+      }
+    });
+  }
+}
+
+selectedItems.forEach(x => addItem(x));
+if (!selectedItems.length) addItem();
+</script>
+{% endblock %}

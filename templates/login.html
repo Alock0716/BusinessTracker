@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sign In · Business Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-card">
+      <div class="login-brand">Business Tracker</div>
+      <h1>Sign in</h1>
+      <p class="muted">Enter your credentials to access your business tracker.</p>
+      {% with messages=get_flashed_messages(with_categories=true) %}
+        {% for category,message in messages %}<div class="flash {{category}}">{{message}}</div>{% endfor %}
+      {% endwith %}
+      <form method="post" class="form login-form">
+        <input type="hidden" name="next" value="{{ next }}">
+        <label>Username<input name="username" autocomplete="username" autofocus required></label>
+        <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+        <button class="button login-button" type="submit">Sign In</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
