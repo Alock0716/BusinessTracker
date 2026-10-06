@@ -1,3 +1,14 @@
-{% extends 'base.html' %}{% block title %}Customers{% endblock %}{% block heading %}Customers{% endblock %}{% block content %}
-<div class="toolbar"><a class="button" href="{{url_for('customer_new')}}">+ Add Customer</a></div>
-<section class="panel"><table><tr><th>Name</th><th>Email</th><th>Username</th><th>Purchases</th><th>Actions</th></tr>{% for c in customers %}<tr><td>{{c.name}}</td><td>{{c.email or '—'}}</td><td>{{c.username or '—'}}</td><td>{{c.sales|length}}</td><td><a class="button secondary" href="{{url_for('customer_edit',id=c.id)}}">Edit</a>{% if not c.sales %}<form class="inline" method="post" action="{{url_for('customer_delete',id=c.id)}}" onsubmit="return confirm('Delete this customer?')"><button class="button secondary danger">Delete</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">No customers yet.</td></tr>{% endfor %}</table></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Customers{% endblock %}
+{% block heading %}Customers{% endblock %}
+{% block content %}
+<section class="cards customer-stats"><div><small>Top Spender</small><strong>{{top_spender.customer.name if top_spender else "—"}}</strong><span class="muted">{{money(top_spender.total_spent) if top_spender else "$0.00"}}</span></div><div><small>Most Frequent</small><strong>{{most_frequent.customer.name if most_frequent else "—"}}</strong><span class="muted">{{most_frequent.purchase_count if most_frequent else 0}} purchases</span></div><div><small>Total Customers</small><strong>{{customers|length}}</strong><span class="muted">Tracked customers</span></div></section><div class="toolbar"><a class="button" href="{{url_for('customer_new')}}">+ Add Customer</a></div>
+<section class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Purchases</th><th>Total Spent</th><th>Avg. Purchase</th><th>Most Frequent Product</th><th>Last Purchase</th><th>Actions</th></tr></thead><tbody>
+{% for x in customers %}<tr>
+<td><strong>{{x.customer.name}}</strong><div class="muted">{{x.customer.email or x.customer.username or 'No contact info'}}</div></td>
+<td>{{x.purchase_count}}</td><td>{{money(x.total_spent)}}</td><td>{{money(x.average_spent)}}</td><td>{{x.favorite_product or '—'}}{% if x.favorite_quantity %}<span class="muted"> ({{x.favorite_quantity|float|round(2)}} units)</span>{% endif %}</td>
+<td>{{x.last_purchase.strftime('%b %d, %Y') if x.last_purchase else '—'}}</td>
+<td class="actions-cell"><a class="button secondary" href="{{url_for('customer_edit',id=x.customer.id)}}">Edit</a>{% if not x.customer.sales %}<form class="inline" method="post" action="{{url_for('customer_delete',id=x.customer.id)}}" onsubmit="return confirm('Delete this customer?')"><button class="button secondary danger">Delete</button></form>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="7">No customers yet.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

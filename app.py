@@ -188,7 +188,23 @@ def sale_delete(id):
     db.session.delete(Sale.query.get_or_404(id)); db.session.commit(); flash('Sale removed.','success'); return redirect(url_for('sales'))
 
 @app.route('/customers')
-def customers(): return render_template('customers/list.html', customers=Customer.query.order_by(Customer.name).all())
+def customers():
+    rows = db.session.query(Customer, func.count(Sale.id).label('purchase_count'),
+        func.coalesce(func.sum(Sale.total_amount), 0).label('total_spent'),
+        func.coalesce(func.avg(Sale.total_amount), 0).label('average_spent'),
+        func.max(Sale.sale_date).label('last_purchase')
+    ).outerjoin(Sale, Customer.id == Sale.customer_id).group_by(Customer.id).order_by(Customer.name).all()
+    customer_stats = []
+    for customer, purchase_count, total_spent, average_spent, last_purchase in rows:
+        frequent = db.session.query(Product.name, func.coalesce(func.sum(SaleItem.quantity), 0).label('qty')).join(
+            SaleItem, Product.id == SaleItem.product_id).join(Sale, Sale.id == SaleItem.sale_id).filter(
+            Sale.customer_id == customer.id).group_by(Product.id).order_by(func.sum(SaleItem.quantity).desc()).first()
+        customer_stats.append({'customer': customer, 'purchase_count': purchase_count, 'total_spent': total_spent,
+            'average_spent': average_spent, 'last_purchase': last_purchase,
+            'favorite_product': frequent[0] if frequent else None, 'favorite_quantity': frequent[1] if frequent else 0})
+    top_spender = max(customer_stats, key=lambda x: x['total_spent'] or 0, default=None)
+    most_frequent = max(customer_stats, key=lambda x: x['purchase_count'] or 0, default=None)
+    return render_template('customers/list.html', customers=customer_stats, top_spender=top_spender, most_frequent=most_frequent)
 
 @app.route('/customers/new', methods=['GET','POST'])
 def customer_new(): return _customer_form(None)
@@ -213,10 +229,32 @@ def customer_delete(id):
 
 @app.route('/analytics')
 def analytics():
-    products=db.session.query(Product.name, func.coalesce(func.sum(SaleItem.quantity),0).label('qty'), func.coalesce(func.sum(SaleItem.quantity*SaleItem.unit_price),0).label('revenue'), func.coalesce(func.sum(SaleItem.quantity*SaleItem.labor_hours),0).label('hours')).join(SaleItem, Product.id==SaleItem.product_id).group_by(Product.id).order_by(func.sum(SaleItem.quantity*SaleItem.unit_price).desc()).all()
-    platforms=db.session.query(Platform.name, func.coalesce(func.sum(Sale.total_amount),0)).join(Sale, Platform.id==Sale.platform_id).group_by(Platform.id).order_by(func.sum(Sale.total_amount).desc()).all()
-    payments=db.session.query(PaymentMethod.name, func.coalesce(func.sum(Sale.total_amount),0)).join(Sale, PaymentMethod.id==Sale.payment_method_id).group_by(PaymentMethod.id).all()
-    return render_template('analytics/index.html', products=products, platforms=platforms, payments=payments)
+    products = db.session.query(Product.name, func.coalesce(func.sum(SaleItem.quantity),0).label('qty'),
+        func.coalesce(func.sum(SaleItem.quantity*SaleItem.unit_price),0).label('revenue'),
+        func.coalesce(func.sum(SaleItem.quantity*SaleItem.labor_hours),0).label('hours')).join(
+        SaleItem, Product.id==SaleItem.product_id).group_by(Product.id).order_by(
+        func.sum(SaleItem.quantity*SaleItem.unit_price).desc()).all()
+    platform_rows = db.session.query(Platform.name, func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).join(
+        Sale, Platform.id==Sale.platform_id).group_by(Platform.id).order_by(func.sum(Sale.total_amount).desc()).all()
+    platforms = [{'name': r[0], 'revenue': float(r[1] or 0)} for r in platform_rows]
+    payments = db.session.query(PaymentMethod.name, func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).join(
+        Sale, PaymentMethod.id==Sale.payment_method_id).group_by(PaymentMethod.id).all()
+    if db.engine.dialect.name == 'sqlite':
+        monthly_rows = db.session.query(func.strftime('%Y-%m', Sale.sale_date).label('month'),
+            func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).group_by(
+            func.strftime('%Y-%m', Sale.sale_date)).order_by(func.strftime('%Y-%m', Sale.sale_date)).all()
+    else:
+        monthly_rows = db.session.execute(text("SELECT to_char(date_trunc('month', sale_date), 'YYYY-MM') AS month, COALESCE(SUM(total_amount),0) AS revenue FROM sale GROUP BY date_trunc('month', sale_date) ORDER BY date_trunc('month', sale_date)")).fetchall()
+    monthly_revenue = [{'month': r.month, 'revenue': float(r.revenue or 0)} for r in monthly_rows[-12:]]
+    top_buyers = db.session.query(Customer.name, func.count(Sale.id).label('purchases'),
+        func.coalesce(func.sum(Sale.total_amount),0).label('spent')).join(Sale, Customer.id==Sale.customer_id).group_by(
+        Customer.id).order_by(func.sum(Sale.total_amount).desc()).limit(10).all()
+    top_addons = db.session.query(ProductAddon.name, func.coalesce(func.sum(SaleItemAddon.quantity),0).label('qty'),
+        func.coalesce(func.sum(SaleItemAddon.quantity*SaleItemAddon.unit_price),0).label('revenue')).join(
+        SaleItemAddon, ProductAddon.id==SaleItemAddon.product_addon_id).group_by(ProductAddon.id).order_by(
+        func.sum(SaleItemAddon.quantity*SaleItemAddon.unit_price).desc()).limit(10).all()
+    return render_template('analytics/index.html', products=products, platforms=platforms, payments=payments,
+        monthly_revenue=monthly_revenue, top_buyers=top_buyers, top_addons=top_addons)
 
 @app.route('/settings', methods=['GET','POST'])
 def settings():
