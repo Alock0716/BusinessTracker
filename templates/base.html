@@ -12,6 +12,12 @@
 	<div class="mobile-nav-overlay" onclick="document.body.classList.remove('nav-open')"></div>
 	<aside>
 		<div class="brand">Business Tracker</div>
+		{% if current_creator %}
+		<div class="nav-seller-availability" aria-live="polite">
+			<span class="seller-active-dot {{'is-inactive' if not current_creator.is_active else ''}}" aria-hidden="true"></span>
+			<span>{{'Available' if current_creator.is_active else 'Unavailable'}}</span>
+		</div>
+		{% endif %}
 		<nav>
 			<a href="{{url_for('storefront')}}">Customer Site</a>
 			{% if current_creator and current_creator.is_admin %}<a href="{{url_for('admin_dashboard')}}">Admin</a>{% endif %}

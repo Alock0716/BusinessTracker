@@ -10,6 +10,19 @@
         <input id="site-search" type="search" name="q" value="{{query}}" placeholder="Search sellers, products, or leaderboards" autocomplete="off">
         <button class="button" type="submit">Search</button>
     </form>
+    <div class="available-sellers-widget">
+        <div class="available-sellers-heading"><strong>Available sellers</strong><span>Choose a seller to view their menu</span></div>
+        {% if available_sellers %}
+        <div class="available-seller-scroll" aria-label="Available sellers">
+            {% for seller in available_sellers %}
+            <a class="available-seller-link" href="{{url_for('seller_store', username=seller.username)}}">
+                <span class="available-seller-copy"><strong>{% include 'storefront/_seller_identity.html' %}</strong><small>@{{seller.username}}</small></span>
+                <span aria-hidden="true">→</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}<p class="available-sellers-empty">No sellers are currently marked available.</p>{% endif %}
+    </div>
 </section>
 <section class="public-section">
     <div class="public-section-heading"><div><p class="public-kicker">{{'Search results' if query else 'Discover'}}</p><h2>{{'Product matches' if query else 'Product menus'}}</h2></div></div>
@@ -17,7 +30,7 @@
     <div class="public-product-grid">
         {% for product,seller,category in product_results %}
         <article class="public-product-card">
-            <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a>{% if not seller.display_name %}<span>@{{seller.username}}</span>{% endif %}{% if category %}<span>{{category.name}}</span>{% endif %}</div>
+            <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{% include 'storefront/_seller_identity.html' %}</a>{% if not seller.display_name %}<span>@{{seller.username}}</span>{% endif %}{% if category %}<span>{{category.name}}</span>{% endif %}</div>
             <h3><a href="{{url_for('seller_store', username=seller.username)}}">{{product.name}}</a></h3>
             {% if product.description %}<p>{{product.description}}</p>{% endif %}
             {% if product.base_price_enabled %}<div class="public-price">{{money(product.base_price)}}</div>{% else %}<div class="public-price">Choose a pricing option</div>{% endif %}
@@ -36,7 +49,7 @@
     <div class="public-section-heading"><div><p class="public-kicker">Also matching</p><h2>Leaderboards</h2></div><a class="public-text-link" href="{{url_for('public_leaderboards', q=query)}}">View all results</a></div>
     <div class="public-list">
         {% for board,seller in board_results[:5] %}
-        <a class="public-list-item" href="{{url_for('public_leaderboard', username=seller.username, id=board.id)}}"><span><strong>{{board.name}}</strong><small>{{seller.display_name or seller.username}} · @{{seller.username}}</small></span><span class="public-list-arrow" aria-hidden="true">›</span></a>
+        <a class="public-list-item" href="{{url_for('public_leaderboard', username=seller.username, id=board.id)}}"><span><strong>{{board.name}}</strong><small>{% include 'storefront/_seller_identity.html' %} · @{{seller.username}}</small></span><span class="public-list-arrow" aria-hidden="true">›</span></a>
         {% endfor %}
     </div>
 </section>
@@ -44,7 +57,7 @@
 {% if query and sellers %}
 <section class="public-section public-search-matches">
     <div class="public-section-heading"><div><p class="public-kicker">Seller search</p><h2>Profiles</h2></div></div>
-    <div class="public-seller-list">{% for seller in sellers %}<a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}} <small>@{{seller.username}}</small><span aria-hidden="true">→</span></a>{% endfor %}</div>
+    <div class="public-seller-list">{% for seller in sellers %}<a href="{{url_for('seller_store', username=seller.username)}}"><span class="public-seller-name">{% include 'storefront/_seller_identity.html' %}</span><small>@{{seller.username}}</small><span aria-hidden="true">→</span></a>{% endfor %}</div>
 </section>
 {% endif %}
 {% endblock %}

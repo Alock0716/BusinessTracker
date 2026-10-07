@@ -25,6 +25,11 @@
         <div class="actions"><button class="button">Save Account Settings</button><a class="button secondary" href="{{url_for('settings')}}">Cancel</a></div>
     </form>
 </section>
+<section class="panel account-settings-panel developer-support-panel">
+    <h2>Support development</h2>
+    {% set developer_return_to = 'account_settings' %}
+    {% include 'developer_support.html' %}
+</section>
 {% if not current_creator.is_admin %}
 <section class="panel account-settings-panel">
     <h2>Seller subscription</h2>

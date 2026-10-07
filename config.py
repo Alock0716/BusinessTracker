@@ -32,6 +32,8 @@ class Config:
     STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
     STRIPE_SELLER_PRICE_ID = os.environ.get('STRIPE_SELLER_PRICE_ID', '')
+    DEVELOPER_CONTACT_EMAIL = os.environ.get('DEVELOPER_CONTACT_EMAIL', '').strip()
+    DEVELOPER_DISPLAY_NAME = os.environ.get('DEVELOPER_DISPLAY_NAME', 'the developer').strip()
     STRIPE_CONNECT_COUNTRY = os.environ.get('STRIPE_CONNECT_COUNTRY', 'US')
     STRIPE_CURRENCY = os.environ.get('STRIPE_CURRENCY', 'usd').lower()
     SQLALCHEMY_TRACK_MODIFICATIONS = False

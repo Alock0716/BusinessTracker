@@ -73,6 +73,30 @@ aside {
   font-weight: 800;
   margin-bottom: 22px;
 }
+.nav-seller-availability {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -10px 0 14px;
+  padding: 9px 10px;
+  border: 1px solid #343a46;
+  border-radius: 6px;
+  color: #d4dae2;
+  font-size: 13px;
+  font-weight: 700;
+}
+.seller-active-dot {
+  display: inline-block;
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2b9b63;
+  vertical-align: middle;
+}
+.seller-active-dot.is-inactive {
+  background: #828995;
+}
 nav {
   display: grid;
   gap: 4px;
@@ -2163,6 +2187,96 @@ nav a:hover {
   background: #755c98;
   color: #fff;
 }
+.available-sellers-widget {
+  max-width: 800px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #ded5e8;
+  border-radius: 7px;
+}
+.available-sellers-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 7px;
+  color: #423653;
+  font-size: 13px;
+}
+.available-sellers-heading span,
+.available-sellers-empty {
+  color: #716781;
+  font-size: 12px;
+}
+.available-sellers-empty { margin: 0; }
+.available-seller-scroll {
+  max-height: 156px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid #eee8f3;
+}
+.available-seller-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 7px 5px;
+  color: #41364f;
+  text-decoration: none;
+  border-bottom: 1px solid #f0ebf4;
+}
+.available-seller-link:last-child { border-bottom: 0; }
+.available-seller-link:hover { background: #faf8fc; }
+.available-seller-copy { display: grid; gap: 1px; }
+.available-seller-copy strong { font-size: 13px; }
+.available-seller-copy small { color: #786e83; font-size: 11px; }
+.available-seller-link > span:last-child { color: #755c98; }
+.seller-active-dot { margin-right: 6px; }
+.seller-availability-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.seller-availability-panel h2 { margin: 0 0 5px; }
+.seller-availability-panel p { margin: 0; }
+.availability-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 132px;
+  padding: 9px 11px;
+  border: 1px solid #cfd5de;
+  border-radius: 6px;
+  background: #f2f4f7;
+  color: #414955;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.availability-switch-track {
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 12px;
+  background: #89919d;
+  transition: background-color 140ms ease;
+}
+.availability-switch-track > span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease;
+}
+.availability-switch.is-on .availability-switch-track { background: #24885a; }
+.availability-switch.is-on .availability-switch-track > span { transform: translateX(14px); }
+.availability-switch:focus-visible { outline: 3px solid #72a9df; outline-offset: 2px; }
 .public-section-heading h2 {
   color: #423653;
 }
@@ -2603,6 +2717,47 @@ nav a:hover {
   color: #315f51;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.developer-tip-disclosure {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #ddd8e4;
+}
+.developer-tip-disclosure summary {
+  width: fit-content;
+  color: #315f51;
+  font-weight: 700;
+  cursor: pointer;
+}
+.developer-support-content {
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+  margin-top: 8px;
+}
+.developer-support-content p { margin: 0; }
+.developer-tip-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.developer-tip-form label {
+  display: grid;
+  gap: 5px;
+  font-weight: 700;
+}
+.developer-tip-form input {
+  width: 150px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid #d7dbe2;
+  border-radius: 6px;
+  font: inherit;
+}
+.developer-tip-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .public-board-seller small,
 .public-seller-list a small {

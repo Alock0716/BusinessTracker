@@ -20,6 +20,14 @@
         "/^python -c \"import app; from models import db,CreatorAccount,Category; ctx=app\\.app\\.app_context\\(\\); ctx\\.push\\(\\); accounts=CreatorAccount\\.query\\.all\\(\\); print\\(\\{'startup_ok':True,'seller_count':len\\(accounts\\),'missing_subscription_categories':sum\\(Category\\.query\\.filter_by\\(owner_id=a\\.id,name='Subscriptions'\\)\\.first\\(\\) is None for a in accounts\\)\\}\\); ctx\\.pop\\(\\)\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python -c \"import app; from types import SimpleNamespace; original_key=app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]; original_create=app\\.stripe\\.checkout\\.Session\\.create; app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]='sk_test_mock'; app\\.stripe\\.checkout\\.Session\\.create=lambda \\*\\*kwargs: SimpleNamespace\\(url='https://checkout\\.stripe\\.test/tip'\\); response=app\\.app\\.test_client\\(\\)\\.post\\('/developer/tip/checkout',data=\\{'amount':'5\\.00','return_to':'storefront'\\}\\); print\\(\\{'tip_checkout_status':response\\.status_code,'redirects_to_stripe':response\\.location=='https://checkout\\.stripe\\.test/tip'\\}\\); app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]=original_key; app\\.stripe\\.checkout\\.Session\\.create=original_create\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import app; from types import SimpleNamespace; calls=\\[\\]; original_key=app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]; original_create=app\\.stripe\\.checkout\\.Session\\.create; app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]='sk_test_mock'; app\\.stripe\\.checkout\\.Session\\.create=lambda \\*\\*kwargs: \\(calls\\.append\\(kwargs\\) or SimpleNamespace\\(url='https://checkout\\.stripe\\.test/tip'\\)\\); client=app\\.app\\.test_client\\(\\); fractional=client\\.post\\('/developer/tip/checkout',data=\\{'amount':'1\\.5'\\}\\); whole=client\\.post\\('/developer/tip/checkout',data=\\{'amount':'7'\\}\\); print\\(\\{'fraction_rejected':fractional\\.status_code==302,'integer_redirects':whole\\.status_code==303,'stripe_amount_cents':calls\\[0\\]\\['line_items'\\]\\[0\\]\\['price_data'\\]\\['unit_amount'\\],'platform_only':not any\\(key in calls\\[0\\] for key in \\('transfer_data','on_behalf_of'\\)\\)\\}\\); app\\.app\\.config\\['STRIPE_SECRET_KEY'\\]=original_key; app\\.stripe\\.checkout\\.Session\\.create=original_create\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

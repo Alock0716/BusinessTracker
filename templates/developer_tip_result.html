@@ -1,0 +1,16 @@
+{% extends 'public_base.html' %}
+{% block title %}Developer Tip · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth checkout-result">
+    {% if paid %}
+    <p class="public-kicker">Payment confirmed</p>
+    <h1>Thank you for supporting development</h1>
+    <p class="muted">Stripe confirmed your tip. Your receipt will come directly from Stripe.</p>
+    {% else %}
+    <p class="public-kicker">Payment not confirmed</p>
+    <h1>Your tip is still processing</h1>
+    <p class="muted">No payment confirmation was received. Check your Stripe receipt before trying again.</p>
+    {% endif %}
+    <a class="button secondary" href="{{url_for(return_to)}}">Continue</a>
+</section>
+{% endblock %}

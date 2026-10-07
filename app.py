@@ -33,7 +33,8 @@ PUBLIC_ENDPOINTS = {
     'login', 'register', 'logout', 'storefront', 'public_leaderboards', 'seller_store',
     'public_leaderboard', 'store_customer_login', 'store_customer_register',
     'store_customer_logout', 'store_customer_account', 'forgot_password', 'reset_password', 'public_product_checkout',
-    'checkout_success', 'checkout_cancel', 'stripe_webhook', 'static',
+    'checkout_success', 'checkout_cancel', 'stripe_webhook', 'developer_tip_checkout',
+    'developer_tip_return', 'static',
 }
 SALE_STATUSES = ('New', 'In Progress', 'Not Started', 'On-Hold', 'Waiting on Payment', 'Canceled', 'Completed')
 ACTIVE_SUBSCRIPTION_STATUSES = ('active', 'trialing')
@@ -628,6 +629,10 @@ with app.app_context():
         ))
     if 'bio' not in creator_columns:
         db.session.execute(text('ALTER TABLE creator_account ADD COLUMN bio TEXT'))
+    if 'is_active' not in creator_columns:
+        db.session.execute(text(
+            'ALTER TABLE creator_account ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT FALSE'
+        ))
     creator_email_definition = 'VARCHAR(255)'
     if 'email' not in creator_columns:
         db.session.execute(text(
@@ -1006,6 +1011,9 @@ def helpers():
         'current_creator': creator,
         'current_store_customer': getattr(g, 'store_customer', None),
         'unread_notifications': unread_notifications,
+        'developer_contact_email': app.config.get('DEVELOPER_CONTACT_EMAIL', ''),
+        'developer_display_name': app.config.get('DEVELOPER_DISPLAY_NAME', 'the developer'),
+        'developer_tip_enabled': bool(app.config.get('STRIPE_SECRET_KEY')),
     }
 
 EXAMPLE_SALE_NOTE = 'EXAMPLE DATA: Starter sale demonstrates related records.'
@@ -1335,10 +1343,15 @@ def storefront():
         sellers = CreatorAccount.query.filter_by(is_approved=True).filter(
             _seller_subscription_access()
         ).order_by(CreatorAccount.username).limit(20).all()
+    available_sellers = CreatorAccount.query.filter_by(
+        is_active=True, is_approved=True
+    ).filter(_seller_subscription_access()).order_by(
+        CreatorAccount.display_name, CreatorAccount.username
+    ).limit(20).all()
     product_results = products_query.order_by(CreatorAccount.username, Product.name).limit(60).all()
     board_results = boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(30).all()
     return render_template(
-        'storefront/index.html', query=query, sellers=sellers,
+        'storefront/index.html', query=query, sellers=sellers, available_sellers=available_sellers,
         product_results=product_results, board_results=board_results,
     )
 
@@ -1551,6 +1564,71 @@ def checkout_cancel(username):
     seller = CreatorAccount.query.filter_by(username=username, is_approved=True).first_or_404()
     return render_template('storefront/checkout_result.html', paid=False, seller=seller, canceled=True)
 
+@app.route('/developer/tip/checkout', methods=['POST'])
+def developer_tip_checkout():
+    if not app.config.get('STRIPE_SECRET_KEY'):
+        flash('Developer tips are temporarily unavailable.', 'error')
+        return redirect(url_for('storefront'))
+    amount_input = request.form.get('amount', '')
+    if not amount_input.isdecimal() or not 1 <= int(amount_input) <= 1000:
+        flash('Choose a whole-dollar tip amount between $1 and $1,000 USD.', 'error')
+        return redirect(url_for('storefront'))
+    amount = int(amount_input)
+    return_to = request.form.get('return_to', '')
+    if return_to not in {'storefront', 'dashboard', 'account_settings'}:
+        return_to = 'storefront'
+    tipper = getattr(g, 'creator', None) or getattr(g, 'store_customer', None)
+    metadata = {'purpose': 'developer_tip'}
+    checkout_args = {
+        'mode': 'payment',
+        'line_items': [{
+            'price_data': {
+                'currency': 'usd',
+                'product_data': {'name': 'Tip the Business Tracker developer'},
+                'unit_amount': _stripe_cents(amount),
+            },
+            'quantity': 1,
+        }],
+        'metadata': metadata,
+        'success_url': url_for('developer_tip_return', return_to=return_to, _external=True) + '&session_id={CHECKOUT_SESSION_ID}',
+        'cancel_url': url_for(return_to, _external=True),
+        'api_key': app.config['STRIPE_SECRET_KEY'],
+    }
+    if tipper:
+        metadata['tipper_type'] = 'seller' if isinstance(tipper, CreatorAccount) else 'buyer'
+        metadata['tipper_id'] = str(tipper.id)
+        checkout_args['client_reference_id'] = str(tipper.id)
+        if tipper.email and not tipper.email.endswith('@example.invalid'):
+            checkout_args['customer_email'] = tipper.email
+    try:
+        checkout = stripe.checkout.Session.create(**checkout_args)
+        return redirect(checkout.url, code=303)
+    except stripe.StripeError as error:
+        flash(getattr(error, 'user_message', None) or 'Stripe could not start the tip checkout.', 'error')
+        return redirect(url_for(return_to))
+
+@app.route('/developer/tip/return')
+def developer_tip_return():
+    paid = False
+    session_id = request.args.get('session_id', '')
+    if session_id and app.config.get('STRIPE_SECRET_KEY'):
+        try:
+            checkout = stripe.checkout.Session.retrieve(
+                session_id, api_key=app.config['STRIPE_SECRET_KEY']
+            )
+            metadata = checkout.get('metadata') or {}
+            paid = (
+                checkout.get('mode') == 'payment'
+                and checkout.get('payment_status') == 'paid'
+                and metadata.get('purpose') == 'developer_tip'
+            )
+        except stripe.StripeError:
+            logging.exception('Could not retrieve developer tip checkout')
+    return_to = request.args.get('return_to', 'storefront')
+    if return_to not in {'storefront', 'dashboard', 'account_settings'}:
+        return_to = 'storefront'
+    return render_template('developer_tip_result.html', paid=paid, return_to=return_to)
+
 @app.route('/stripe/webhook', methods=['POST'])
 def stripe_webhook():
     webhook_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
@@ -1647,6 +1725,20 @@ def dashboard():
     return render_template('dashboard.html', revenue=revenue, monthly=monthly,
         orders=orders, monthly_orders=monthly_orders, hours=hours, top=top,
         has_example_data=has_example_data)
+
+@app.route('/seller/availability', methods=['POST'])
+def seller_availability():
+    requested_state = request.form.get('is_active')
+    if requested_state not in {'0', '1'}:
+        abort(400)
+    g.creator.is_active = requested_state == '1'
+    db.session.commit()
+    flash(
+        'Your profile is now available to buyers.' if g.creator.is_active
+        else 'Your profile is no longer listed as available.',
+        'success',
+    )
+    return redirect(url_for('dashboard'))
 
 @app.route('/products')
 def products():

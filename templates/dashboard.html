@@ -8,6 +8,18 @@
 	<div><small>Orders</small><strong>{{orders}}</strong></div>
 	<div><small>Labor Hours</small><strong>{{'%.2f'|format(hours|float)}}</strong></div>
 </section>
+<section class="panel seller-availability-panel">
+	<div>
+		<h2>Seller availability</h2>
+		<p>{% if current_creator.is_active %}<span class="seller-active-dot" role="img" aria-label="Available"></span>You are listed as available to buyers.{% else %}You are not currently listed as available.{% endif %}</p>
+	</div>
+	<form method="post" action="{{url_for('seller_availability')}}">
+		<button class="availability-switch {{'is-on' if current_creator.is_active else ''}}" type="submit" role="switch" aria-label="Seller availability" aria-checked="{{'true' if current_creator.is_active else 'false'}}" name="is_active" value="{{'0' if current_creator.is_active else '1'}}">
+			<span class="availability-switch-track" aria-hidden="true"><span></span></span>
+			<span>{{'Active' if current_creator.is_active else 'Inactive'}}</span>
+		</button>
+	</form>
+</section>
 {% if has_example_data %}
 <section class="panel onboarding-panel">
 	<div><h2>Example records are ready</h2><p>Products, tags, fields, add-ons, bundles, a customer, a sale, and a leaderboard were added as a guided sample. Remove the sample set at any time; your own records are kept.</p></div>
@@ -18,6 +30,11 @@
 	<section class="panel"><h2>Top Products</h2><table><tr><th>Product</th><th>Units</th><th>Revenue</th></tr>{% for p in top %}<tr><td>{{p.name}}</td><td>{{p.qty}}</td><td>{{money(p.rev)}}</td></tr>{% else %}<tr><td colspan="3">No sales yet.</td></tr>{% endfor %}</table></section>
 	<section class="panel"><h2>Quick Start</h2><p>Create products first, then record sales. Products can have trackable fields, bundles, and optional add-ons.</p><a class="button" href="{{url_for('product_new')}}">Create Product</a> <a class="button secondary" href="{{url_for('sale_new')}}">Record Sale</a> <a class="button secondary" href="{{url_for('service_subscriptions')}}">Manage subscriptions</a></section>
 </div>
+<section class="panel developer-support-panel">
+	<h2>Support development</h2>
+	{% set developer_return_to = 'dashboard' %}
+	{% include 'developer_support.html' %}
+</section>
 <section class="panel relationship-guide">
 	<h2>How linked records work</h2>
 	<p>A sale links to its customer and products; a leaderboard score links to its customer. These database links (foreign keys) protect related information. If another record refers to a customer, product, or category, remove or reassign that dependent sale or score first, then delete the record.</p>
