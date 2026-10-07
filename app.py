@@ -6,13 +6,17 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from email.message import EmailMessage
 import json
 import logging
+import os
 import re
 import smtplib
 import ssl
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlsplit
+from uuid import uuid4
 import stripe
+from PIL import Image, ImageOps, UnidentifiedImageError
 from flask import Flask, abort, g, has_request_context, render_template, request, redirect, send_file, url_for, flash, session
 from sqlalchemy import case, event, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +29,7 @@ from models import db, CreatorAccount, StoreCustomer, SellerNotification, Catego
 
 app = Flask(__name__)
 app.config.from_object(Config)
+app.config.setdefault('MAX_CONTENT_LENGTH', 6 * 1024 * 1024)
 db.init_app(app)
 
 LOGIN_USERNAME = app.config.get('LOGIN_USERNAME', 'admin')
@@ -348,7 +353,7 @@ def forgot_password():
             reset_url = url_for('reset_password', token=token, _external=True)
             _send_email(
                 account.email,
-                'Reset your Business Tracker password',
+                'Reset your Solaraia Creator Suite password',
                 f'Use this link within one hour to reset your password:\n\n{reset_url}\n\nIf you did not request this, ignore this email.',
             )
         flash('If an account exists for that email, a password reset link will be sent.', 'success')
@@ -786,6 +791,8 @@ with app.app_context():
         ))
     if 'bio' not in creator_columns:
         db.session.execute(text('ALTER TABLE creator_account ADD COLUMN bio TEXT'))
+    if 'profile_image' not in creator_columns:
+        db.session.execute(text('ALTER TABLE creator_account ADD COLUMN profile_image VARCHAR(255)'))
     if 'is_active' not in creator_columns:
         db.session.execute(text(
             'ALTER TABLE creator_account ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT FALSE'
@@ -798,6 +805,7 @@ with app.app_context():
     creator_preference_migrations = {
         'banner_notifications': 'BOOLEAN NOT NULL DEFAULT TRUE',
         'email_notifications': 'BOOLEAN NOT NULL DEFAULT FALSE',
+        'disable_content_contact': 'BOOLEAN NOT NULL DEFAULT FALSE',
     }
     for column_name, definition in creator_preference_migrations.items():
         if column_name not in creator_columns:
@@ -1010,6 +1018,39 @@ def money(v):
 
 def _stripe_cents(value):
     return int((money(value) * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+def _save_seller_profile_image(upload):
+    payload = upload.read(5 * 1024 * 1024 + 1)
+    if not payload or len(payload) > 5 * 1024 * 1024:
+        raise ValueError('Choose an image no larger than 5 MB.')
+    try:
+        with Image.open(BytesIO(payload)) as source:
+            if source.format not in {'PNG', 'JPEG', 'WEBP'}:
+                raise ValueError('Upload a PNG, JPEG, or WebP image.')
+            if source.width * source.height > 20_000_000:
+                raise ValueError('Choose an image with fewer than 20 megapixels.')
+            source.verify()
+        with Image.open(BytesIO(payload)) as source:
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail((512, 512), Image.Resampling.LANCZOS)
+            image = image.convert('RGBA' if 'A' in image.getbands() else 'RGB')
+            filename = f'{uuid4().hex}.webp'
+            upload_dir = Path(app.static_folder) / 'uploads' / 'profiles'
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            image.save(upload_dir / filename, 'WEBP', quality=86, method=6)
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
+        raise ValueError('The uploaded file is not a valid supported image.') from error
+    return f'uploads/profiles/{filename}'
+
+def _remove_seller_profile_image(relative_path):
+    if not relative_path or not relative_path.startswith('uploads/profiles/'):
+        return
+    filename = Path(relative_path).name
+    if not re.fullmatch(r'[a-f0-9]{32}\.webp', filename):
+        return
+    image_path = Path(app.static_folder) / 'uploads' / 'profiles' / filename
+    if image_path.is_file():
+        image_path.unlink()
 
 def _sales_customer_for_buyer(owner_id, email, name, username=None, contact_number=None):
     if not email:
@@ -1673,6 +1714,19 @@ def admin_user_password(id):
         flash(f'Password reset for @{account.username}.', 'success')
     return redirect(_admin_return_url())
 
+@app.route('/admin/users/<int:id>/content-tip', methods=['POST'])
+def admin_user_content_tip(id):
+    account = CreatorAccount.query.get_or_404(id)
+    if not _form_version_matches(account):
+        return redirect(_admin_return_url())
+    account.disable_content_contact = request.form.get('disable_content_contact') == '1'
+    db.session.commit()
+    flash(
+        f'Content/contact tip details are {"hidden from" if account.disable_content_contact else "shown to"} @{account.username}.',
+        'success',
+    )
+    return redirect(_admin_return_url())
+
 @app.route('/admin/users/<int:id>/delete', methods=['POST'])
 def admin_user_delete(id):
     account = CreatorAccount.query.get_or_404(id)
@@ -1712,6 +1766,7 @@ def remove_creator_examples():
 @app.route('/')
 def storefront():
     query = request.args.get('q', '').strip()
+    seller_filter = request.args.get('seller', '').strip()
     products_query = db.session.query(Product, CreatorAccount, Category).join(
         CreatorAccount, CreatorAccount.id == Product.owner_id
     ).outerjoin(Category, (Category.id == Product.category_id) & (Category.owner_id == Product.owner_id)).options(
@@ -1724,6 +1779,19 @@ def storefront():
         CreatorAccount, CreatorAccount.id == Leaderboard.owner_id
     ).filter(Leaderboard.is_public.is_(True), CreatorAccount.is_approved.is_(True))
     boards_query = boards_query.filter(_seller_subscription_access())
+    if seller_filter:
+        products_query = products_query.filter(
+            func.lower(CreatorAccount.username) == seller_filter.lower()
+        )
+        boards_query = boards_query.filter(
+            func.lower(CreatorAccount.username) == seller_filter.lower()
+        )
+    seller_options = CreatorAccount.query.join(
+        Product, Product.owner_id == CreatorAccount.id
+    ).filter(
+        Product.active.is_(True), Product.is_public.is_(True),
+        CreatorAccount.is_approved.is_(True), _seller_subscription_access(),
+    ).distinct().order_by(CreatorAccount.display_name, CreatorAccount.username).all()
     if query:
         pattern = f'%{query}%'
         products_query = products_query.filter(or_(
@@ -1742,11 +1810,14 @@ def storefront():
         ).limit(20).all()
     else:
         sellers = []
-    available_sellers = CreatorAccount.query.filter_by(
-        is_active=True, is_approved=True
-    ).filter(_seller_subscription_access()).order_by(
+    available_sellers = CreatorAccount.query.join(
+        Product, Product.owner_id == CreatorAccount.id
+    ).filter(
+        CreatorAccount.is_active.is_(True), CreatorAccount.is_approved.is_(True),
+        Product.active.is_(True), Product.is_public.is_(True), _seller_subscription_access(),
+    ).distinct().order_by(
         CreatorAccount.display_name, CreatorAccount.username
-    ).limit(20).all()
+    ).all()
     product_results = products_query.order_by(CreatorAccount.username, Product.name).limit(60).all()
     board_results = (
         boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(30).all()
@@ -1754,7 +1825,8 @@ def storefront():
     )
     board_top_entries = _leaderboard_top_entries(board_results[:5])
     return render_template(
-        'storefront/index.html', query=query, sellers=sellers, available_sellers=available_sellers,
+        'storefront/index.html', query=query, seller_filter=seller_filter,
+        seller_options=seller_options, sellers=sellers, available_sellers=available_sellers,
         product_results=product_results, board_results=board_results,
         board_top_entries=board_top_entries,
     )
@@ -2004,7 +2076,7 @@ def developer_tip_checkout():
         'line_items': [{
             'price_data': {
                 'currency': 'usd',
-                'product_data': {'name': 'Tip the Business Tracker developer'},
+                'product_data': {'name': 'Tip the Solaraia Creator Suite developer'},
                 'unit_amount': _stripe_cents(amount),
             },
             'quantity': 1,
@@ -2915,42 +2987,130 @@ def leaderboard_delete(id):
 
 @app.route('/analytics')
 def analytics():
-    products = db.session.query(Product.name, func.coalesce(func.sum(SaleItem.quantity),0).label('qty'),
-        func.coalesce(func.sum(SaleItem.quantity*SaleItem.unit_price),0).label('revenue'),
-        func.coalesce(func.sum(SaleItem.quantity*SaleItem.labor_hours),0).label('hours')).join(
-        SaleItem, Product.id==SaleItem.product_id).join(Sale, Sale.id==SaleItem.sale_id).filter(
-        Product.owner_id == g.creator.id, Sale.owner_id == g.creator.id).group_by(Product.id).order_by(
-        func.sum(SaleItem.quantity*SaleItem.unit_price).desc()).all()
-    platform_rows = db.session.query(Platform.name, func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).join(
-        Sale, Platform.id==Sale.platform_id).filter(Platform.owner_id == g.creator.id, Sale.owner_id == g.creator.id).group_by(
-        Platform.id).order_by(func.sum(Sale.total_amount).desc()).all()
-    platforms = [{'name': r[0], 'revenue': float(r[1] or 0)} for r in platform_rows]
-    payments = db.session.query(PaymentMethod.name, func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).join(
-        Sale, PaymentMethod.id==Sale.payment_method_id).filter(PaymentMethod.owner_id == g.creator.id,
-        Sale.owner_id == g.creator.id).group_by(PaymentMethod.id).all()
+    owner_id = g.creator.id
+    today = date.today()
+    not_canceled = Sale.status != 'Canceled'
+    products = db.session.query(
+        Product.name,
+        func.coalesce(func.sum(SaleItem.quantity), 0).label('qty'),
+        func.coalesce(func.sum(SaleItem.quantity * SaleItem.unit_price), 0).label('revenue'),
+        func.coalesce(func.sum(SaleItem.quantity * SaleItem.labor_hours), 0).label('hours'),
+    ).join(SaleItem, Product.id == SaleItem.product_id).join(
+        Sale, Sale.id == SaleItem.sale_id
+    ).filter(
+        Product.owner_id == owner_id, Sale.owner_id == owner_id, not_canceled,
+    ).group_by(Product.id).order_by(func.sum(SaleItem.quantity * SaleItem.unit_price).desc()).all()
+    platform_rows = db.session.query(
+        Platform.name, func.coalesce(func.sum(Sale.total_amount), 0).label('revenue'),
+    ).join(Sale, Platform.id == Sale.platform_id).filter(
+        Platform.owner_id == owner_id, Sale.owner_id == owner_id, not_canceled,
+    ).group_by(Platform.id).order_by(func.sum(Sale.total_amount).desc()).all()
+    platforms = [{'name': row[0], 'revenue': float(row[1] or 0)} for row in platform_rows]
+    payments = db.session.query(
+        PaymentMethod.name, func.coalesce(func.sum(Sale.total_amount), 0).label('revenue'),
+    ).join(Sale, PaymentMethod.id == Sale.payment_method_id).filter(
+        PaymentMethod.owner_id == owner_id, Sale.owner_id == owner_id, not_canceled,
+    ).group_by(PaymentMethod.id).all()
     if db.engine.dialect.name == 'sqlite':
-        monthly_rows = db.session.query(func.strftime('%Y-%m', Sale.sale_date).label('month'),
-            func.coalesce(func.sum(Sale.total_amount),0).label('revenue')).filter(Sale.owner_id == g.creator.id).group_by(
-            func.strftime('%Y-%m', Sale.sale_date)).order_by(func.strftime('%Y-%m', Sale.sale_date)).all()
+        month_expression = func.strftime('%Y-%m', Sale.sale_date)
+        monthly_rows = db.session.query(
+            month_expression.label('month'),
+            func.coalesce(func.sum(Sale.total_amount), 0).label('revenue'),
+            func.sum(case((not_canceled, 1), else_=0)).label('orders'),
+        ).filter(Sale.owner_id == owner_id).group_by(month_expression).order_by(month_expression).all()
     else:
-        monthly_rows = db.session.execute(text("SELECT to_char(date_trunc('month', sale_date), 'YYYY-MM') AS month, COALESCE(SUM(total_amount),0) AS revenue FROM sale WHERE owner_id = :owner_id GROUP BY date_trunc('month', sale_date) ORDER BY date_trunc('month', sale_date)"), {'owner_id': g.creator.id}).fetchall()
-    monthly_revenue = [{'month': r.month, 'revenue': float(r.revenue or 0)} for r in monthly_rows[-12:]]
-    top_buyers = db.session.query(Customer.name, func.count(Sale.id).label('purchases'),
-        func.coalesce(func.sum(Sale.total_amount),0).label('spent')).join(Sale, Customer.id==Sale.customer_id).group_by(
-        Customer.id).filter(Customer.owner_id == g.creator.id, Sale.owner_id == g.creator.id).order_by(
-        func.sum(Sale.total_amount).desc()).limit(10).all()
+        monthly_rows = db.session.execute(text(
+            "SELECT to_char(date_trunc('month', sale_date), 'YYYY-MM') AS month, "
+            "COALESCE(SUM(total_amount),0) AS revenue, "
+            "SUM(CASE WHEN status <> 'Canceled' THEN 1 ELSE 0 END) AS orders "
+            "FROM sale WHERE owner_id = :owner_id GROUP BY date_trunc('month', sale_date) "
+            "ORDER BY date_trunc('month', sale_date)"
+        ), {'owner_id': owner_id}).fetchall()
+    monthly_stats = [
+        {'month': row.month, 'revenue': float(row.revenue or 0), 'orders': int(row.orders or 0)}
+        for row in monthly_rows[-12:]
+    ]
+    monthly_revenue = monthly_stats
+    monthly_orders = monthly_stats
+    top_buyers = db.session.query(
+        Customer.name, func.count(Sale.id).label('purchases'),
+        func.coalesce(func.sum(Sale.total_amount), 0).label('spent'),
+    ).join(Sale, Customer.id == Sale.customer_id).filter(
+        Customer.owner_id == owner_id, Sale.owner_id == owner_id, Sale.paid.is_(True), not_canceled,
+    ).group_by(Customer.id).order_by(func.sum(Sale.total_amount).desc()).limit(10).all()
     addon_quantity_factor = case(
-        (SaleItemAddon.price_mode == 'per_quantity', SaleItem.quantity), else_=1
+        (SaleItemAddon.price_mode == 'per_quantity', SaleItem.quantity), else_=1,
     )
     addon_revenue = SaleItemAddon.quantity * SaleItemAddon.unit_price * addon_quantity_factor
-    top_addons = db.session.query(ProductAddon.name, func.coalesce(func.sum(SaleItemAddon.quantity),0).label('qty'),
-        func.coalesce(func.sum(addon_revenue),0).label('revenue')).join(
-        SaleItemAddon, ProductAddon.id==SaleItemAddon.product_addon_id).join(
-        Product, Product.id == ProductAddon.product_id).join(SaleItem, SaleItem.id == SaleItemAddon.sale_item_id).join(
-        Sale, Sale.id == SaleItem.sale_id).filter(Product.owner_id == g.creator.id, Sale.owner_id == g.creator.id).group_by(ProductAddon.id).order_by(
-        func.sum(addon_revenue).desc()).limit(10).all()
-    return render_template('analytics/index.html', products=products, platforms=platforms, payments=payments,
-        monthly_revenue=monthly_revenue, top_buyers=top_buyers, top_addons=top_addons)
+    top_addons = db.session.query(
+        ProductAddon.name, func.coalesce(func.sum(SaleItemAddon.quantity), 0).label('qty'),
+        func.coalesce(func.sum(addon_revenue), 0).label('revenue'),
+    ).join(SaleItemAddon, ProductAddon.id == SaleItemAddon.product_addon_id).join(
+        Product, Product.id == ProductAddon.product_id
+    ).join(SaleItem, SaleItem.id == SaleItemAddon.sale_item_id).join(
+        Sale, Sale.id == SaleItem.sale_id
+    ).filter(Product.owner_id == owner_id, Sale.owner_id == owner_id, not_canceled).group_by(
+        ProductAddon.id
+    ).order_by(func.sum(addon_revenue).desc()).limit(10).all()
+
+    paid_sales, unpaid_sales, paid_revenue = db.session.query(
+        func.coalesce(func.sum(case((Sale.paid.is_(True), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((Sale.paid.is_(False), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((Sale.paid.is_(True), Sale.total_amount), else_=0)), 0),
+    ).filter(Sale.owner_id == owner_id, not_canceled).one()
+    paid_sales = int(paid_sales or 0)
+    paid_revenue = float(paid_revenue or 0)
+    total_buyers = db.session.query(func.count(func.distinct(Sale.customer_id))).filter(
+        Sale.owner_id == owner_id, Sale.paid.is_(True), Sale.status != 'Canceled',
+        Sale.customer_id.isnot(None),
+    ).scalar() or 0
+    repeat_buyers = db.session.query(Sale.customer_id).filter(
+        Sale.owner_id == owner_id, Sale.paid.is_(True), Sale.status != 'Canceled',
+        Sale.customer_id.isnot(None),
+    ).group_by(Sale.customer_id).having(func.count(Sale.id) >= 2).count()
+    delivered_orders = db.session.query(func.count(func.distinct(Sale.id))).join(
+        SaleItem, SaleItem.sale_id == Sale.id
+    ).join(Product, Product.id == SaleItem.product_id).filter(
+        Sale.owner_id == owner_id, Product.owner_id == owner_id,
+        Product.requires_delivery.is_(True), not_canceled,
+    ).scalar() or 0
+    all_orders = db.session.query(func.count(Sale.id)).filter(
+        Sale.owner_id == owner_id, not_canceled,
+    ).scalar() or 0
+    subscription_counts = dict(db.session.query(
+        ServiceSubscription.status, func.count(ServiceSubscription.id),
+    ).filter(ServiceSubscription.owner_id == owner_id).group_by(ServiceSubscription.status).all())
+    overdue_subscriptions = ServiceSubscription.query.filter(
+        ServiceSubscription.owner_id == owner_id, ServiceSubscription.status == 'active',
+        ServiceSubscription.current_period_end < today,
+    ).count()
+    subscriber_rows = db.session.query(
+        Customer, func.min(ServiceSubscription.started_at).label('first_started'),
+    ).join(ServiceSubscription, ServiceSubscription.customer_id == Customer.id).filter(
+        Customer.owner_id == owner_id, ServiceSubscription.owner_id == owner_id,
+        ServiceSubscription.status == 'active',
+    ).group_by(Customer.id).order_by(func.min(ServiceSubscription.started_at)).limit(10).all()
+    longest_subscribers = [{
+        'name': customer.name,
+        'days': max((today - first_started).days, 0),
+        'started': first_started,
+    } for customer, first_started in subscriber_rows]
+    subscription_statuses = [
+        {'status': status, 'count': int(subscription_counts.get(status, 0))}
+        for status in ('active', 'paused', 'canceled', 'expired')
+    ]
+    return render_template(
+        'analytics/index.html', products=products, platforms=platforms, payments=payments,
+        monthly_revenue=monthly_revenue, monthly_orders=monthly_orders,
+        top_buyers=top_buyers, top_addons=top_addons,
+        paid_sales=paid_sales, unpaid_sales=int(unpaid_sales or 0), paid_revenue=paid_revenue,
+        average_order_value=paid_revenue / paid_sales if paid_sales else 0,
+        total_buyers=total_buyers, repeat_buyers=repeat_buyers,
+        repeat_buyer_rate=repeat_buyers / total_buyers * 100 if total_buyers else 0,
+        delivered_orders=delivered_orders, standard_orders=max(int(all_orders) - delivered_orders, 0),
+        subscription_statuses=subscription_statuses,
+        overdue_subscriptions=overdue_subscriptions, longest_subscribers=longest_subscribers,
+    )
 
 @app.route('/settings/billing')
 def seller_billing():
@@ -3066,6 +3226,8 @@ def account_settings():
     if request.method == 'POST':
         if not _form_version_matches(account):
             return redirect(url_for('account_settings'))
+        profile_upload = request.files.get('profile_image')
+        remove_profile_image = request.form.get('remove_profile_image') == '1'
         username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         display_name = request.form.get('display_name', '').strip()
@@ -3096,15 +3258,29 @@ def account_settings():
         elif new_password != password_confirm:
             flash('The new passwords do not match.', 'error')
         else:
+            old_profile_image = account.profile_image
+            try:
+                if remove_profile_image:
+                    profile_image = None
+                elif profile_upload and profile_upload.filename:
+                    profile_image = _save_seller_profile_image(profile_upload)
+                else:
+                    profile_image = old_profile_image
+            except ValueError as error:
+                flash(str(error), 'error')
+                return redirect(url_for('account_settings'))
             account.username = username
             account.email = email
             account.display_name = display_name or None
             account.bio = bio or None
+            account.profile_image = profile_image
             account.banner_notifications = request.form.get('banner_notifications') == '1'
             account.email_notifications = request.form.get('email_notifications') == '1'
             if new_password:
                 account.password_hash = generate_password_hash(new_password)
             db.session.commit()
+            if old_profile_image != profile_image:
+                _remove_seller_profile_image(old_profile_image)
             flash('Account settings saved.', 'success')
             return redirect(url_for('account_settings'))
     return render_template('settings/account.html', account=account)

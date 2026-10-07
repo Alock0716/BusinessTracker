@@ -1,17 +1,25 @@
 {% extends 'public_base.html' %}
-{% block title %}Product Menus · Business Tracker{% endblock %}
+{% block title %}Product Menus · Solaraia Creator Suite{% endblock %}
 {% block content %}
 <section class="public-intro">
     <p class="public-kicker">Independent creators and sellers</p>
     <h1>Browse the menus</h1>
     <p>Explore products, services, and makers across the community.</p>
-    <form class="public-search-form" method="get" action="{{url_for('storefront')}}" role="search">
-        <label class="visually-hidden" for="site-search">Search sellers, products, or leaderboards</label>
-        <input id="site-search" type="search" name="q" value="{{query}}" placeholder="Search sellers, products, or leaderboards" autocomplete="off">
-        <button class="button" type="submit">Search</button>
-    </form>
-    <div class="available-sellers-widget">
-        <div class="available-sellers-heading"><strong>Available sellers</strong><span>Choose a seller to view their menu</span></div>
+    <div class="browse-market-tools">
+        <div class="browse-search-tools">
+            <form class="public-search-form" method="get" action="{{url_for('storefront')}}" role="search">
+                <label class="visually-hidden" for="site-search">Search sellers, products, or leaderboards</label>
+                <input id="site-search" class="browse-search-input" type="search" name="q" value="{{query}}" placeholder="Search sellers, products, or leaderboards" autocomplete="off">
+                <label class="visually-hidden" for="seller-filter">Filter by seller</label>
+                <select id="seller-filter" class="browse-seller-filter" name="seller">
+                    <option value="">All Sellers</option>
+                    {% for seller in seller_options %}<option value="{{seller.username}}" {{'selected' if seller_filter|lower == seller.username|lower else ''}}>{{seller.display_name or seller.username}} · @{{seller.username}}</option>{% endfor %}
+                </select>
+                <button class="button" type="submit">Search</button>
+            </form>
+        </div>
+        <div class="available-sellers-widget">
+        <div class="available-sellers-heading"><strong>Available Now</strong><span>Active sellers</span></div>
         {% if available_sellers %}
         <div class="available-seller-scroll" aria-label="Available sellers">
             {% for seller in available_sellers %}
@@ -21,7 +29,8 @@
             </a>
             {% endfor %}
         </div>
-        {% else %}<p class="available-sellers-empty">No sellers are currently marked available.</p>{% endif %}
+        {% else %}<p class="available-sellers-empty">No active sellers have public products.</p>{% endif %}
+        </div>
     </div>
 </section>
 <section class="public-section">

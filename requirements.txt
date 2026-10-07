@@ -5,3 +5,4 @@ stripe>=11,<20
 
 gunicorn>=23,<24
 psycopg2-binary>=2.9,<3
+Pillow>=11,<13

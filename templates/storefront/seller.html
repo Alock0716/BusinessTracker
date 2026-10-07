@@ -1,8 +1,9 @@
 {% extends 'public_base.html' %}
-{% block title %}{{seller.display_name or seller.username}} · Business Tracker{% endblock %}
+{% block title %}{{seller.display_name or seller.username}} · Solaraia Creator Suite{% endblock %}
 {% block content %}
 <section class="public-seller-heading">
     <p class="public-kicker">Seller profile</p>
+    {% set seller_avatar_large = true %}
     <h1>{% include 'storefront/_seller_identity.html' %}</h1>
     {% if seller.display_name %}<p class="public-profile-handle">@{{seller.username}}</p>{% endif %}
     {% if seller.bio %}<p class="public-seller-bio">{{seller.bio|urlize(target='_blank', rel='nofollow noopener noreferrer')}}</p>{% else %}<p>Products and community standings from this seller.</p>{% endif %}

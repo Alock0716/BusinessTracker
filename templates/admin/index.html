@@ -52,6 +52,12 @@
                             <button class="button secondary">{{'Restore fee' if account.subscription_exempt else 'Waive fee'}}</button>
                         </form>
                         {% endif %}
+                        <form method="post" action="{{url_for('admin_user_content_tip', id=account.id)}}">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <input type="hidden" name="disable_content_contact" value="{{'0' if account.disable_content_contact else '1'}}">
+                            <button class="button secondary">{{'Show content/contact tips' if account.disable_content_contact else 'Disable content/contact tips'}}</button>
+                        </form>
                         <form method="post" action="{{url_for('admin_user_password', id=account.id)}}" class="admin-password-form">
                             <input type="hidden" name="next" value="{{request.full_path}}">
                             <input type="hidden" name="version_id" value="{{account.version_id}}">

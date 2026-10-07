@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,initial-scale=1">
-	<title>{% block title %}Business Tracker{% endblock %}</title>
+	<title>{% block title %}Solaraia Creator Suite{% endblock %}</title>
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 	<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
@@ -11,7 +11,7 @@
 	<button class="mobile-menu-button" type="button" aria-label="Open navigation" onclick="document.body.classList.toggle('nav-open')">☰</button>
 	<div class="mobile-nav-overlay" onclick="document.body.classList.remove('nav-open')"></div>
 	<aside>
-		<div class="brand">Business Tracker</div>
+		<div class="brand"><img src="{{url_for('static', filename='Logo.png')}}" alt=""><span>Solaraia Creator Suite</span></div>
 		{% if current_creator %}
 		<div class="nav-seller-availability" aria-live="polite">
 			<span class="seller-active-dot {{'is-inactive' if not current_creator.is_active else ''}}" aria-hidden="true"></span>

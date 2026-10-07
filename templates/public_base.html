@@ -3,13 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{% block title %}Business Tracker{% endblock %}</title>
+    <title>{% block title %}Solaraia Creator Suite{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 <body class="public-site">
     <header class="public-header">
-        <a class="public-wordmark" href="{{url_for('storefront')}}">Business Tracker</a>
+        <a class="public-wordmark" href="{{url_for('storefront')}}"><img src="{{url_for('static', filename='Logo.png')}}" alt=""><span>Solaraia Creator Suite</span></a>
         <nav class="public-browse-nav" aria-label="Browse">
             <a class="{{'active' if request.endpoint == 'storefront' else ''}}" href="{{url_for('storefront')}}">Menus</a>
             <a class="{{'active' if request.endpoint in ('public_leaderboards', 'public_leaderboard') else ''}}" href="{{url_for('public_leaderboards')}}">Leaderboards</a>

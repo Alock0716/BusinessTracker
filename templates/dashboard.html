@@ -33,7 +33,7 @@
 <section class="panel developer-support-panel">
 	<h2>Support development</h2>
 	{% set developer_return_to = 'dashboard' %}
-	{% set developer_show_contact = true %}
+	{% set developer_show_contact = not current_creator.disable_content_contact %}
 	{% include 'developer_support.html' %}
 </section>
 <section class="panel relationship-guide">

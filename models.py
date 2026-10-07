@@ -16,6 +16,7 @@ class CreatorAccount(db.Model):
     email = db.Column(db.String(255), nullable=False, unique=True)
     display_name = db.Column(db.String(120))
     bio = db.Column(db.Text)
+    profile_image = db.Column(db.String(255))
     is_active = db.Column(db.Boolean, nullable=False, default=False)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
@@ -32,6 +33,7 @@ class CreatorAccount(db.Model):
     accepting_orders = db.Column(db.Boolean, nullable=False, default=False)
     banner_notifications = db.Column(db.Boolean, nullable=False, default=True)
     email_notifications = db.Column(db.Boolean, nullable=False, default=False)
+    disable_content_contact = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     version_id = db.Column(db.Integer, nullable=False, default=1)
     __table_args__ = (

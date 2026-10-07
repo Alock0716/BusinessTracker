@@ -2,28 +2,50 @@
 {% block title %}Analytics{% endblock %}
 {% block heading %}Analytics{% endblock %}
 {% block content %}
+<section class="cards analytics-summary">
+	<div><small>Paid revenue</small><strong>{{money(paid_revenue)}}</strong></div>
+	<div><small>Paid orders</small><strong>{{paid_sales}}</strong><span class="muted">{{unpaid_sales}} unpaid</span></div>
+	<div><small>Average paid order</small><strong>{{money(average_order_value)}}</strong></div>
+	<div><small>Repeat buyers</small><strong>{{'%.1f'|format(repeat_buyer_rate)}}%</strong><span class="muted">{{repeat_buyers}} of {{total_buyers}}</span></div>
+	<div><small>Delivery orders</small><strong>{{delivered_orders}}</strong><span class="muted">{{standard_orders}} standard</span></div>
+	<div class="summary-overdue"><small>Overdue subscriptions</small><strong>{{overdue_subscriptions}}</strong></div>
+</section>
 <div class="analytics-grid">
-<section class="panel chart-panel chart-wide"><div class="panel-heading"><div><h2>Revenue Trend</h2><p class="muted">Monthly revenue over the most recent 12 months.</p></div></div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></section>
-<section class="panel chart-panel"><h2>Top Products</h2><div class="chart-wrap short"><canvas id="productChart"></canvas></div></section>
-<section class="panel chart-panel"><h2>Revenue by Platform</h2><div class="chart-wrap short"><canvas id="platformChart"></canvas></div></section>
+	<section class="panel chart-panel chart-wide"><div class="panel-heading"><div><h2>Revenue trend</h2><p class="muted">Non-canceled sales over the most recent 12 months.</p></div></div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></section>
+	<section class="panel chart-panel chart-wide"><h2>Order volume</h2><p class="muted">Non-canceled orders by month.</p><div class="chart-wrap short"><canvas id="ordersChart"></canvas></div></section>
+	<section class="panel chart-panel"><h2>Top products by revenue</h2><div class="chart-wrap short"><canvas id="productChart"></canvas></div></section>
+	<section class="panel chart-panel"><h2>Revenue by platform</h2><div class="chart-wrap short"><canvas id="platformChart"></canvas></div></section>
+	<section class="panel chart-panel"><h2>Top add-ons by revenue</h2><div class="chart-wrap short"><canvas id="addonChart"></canvas></div></section>
+	<section class="panel chart-panel"><h2>Service subscription status</h2><div class="chart-wrap short"><canvas id="subscriptionChart"></canvas></div></section>
+	<section class="panel chart-panel"><h2>Orders by delivery</h2><div class="chart-wrap short"><canvas id="deliveryChart"></canvas></div></section>
 </div>
 <div class="grid analytics-tables">
-<section class="panel"><h2>Product Performance</h2><div class="table-scroll"><table><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Hours</th><th>$/Hour</th></tr>{% for p in products %}<tr><td>{{p.name}}</td><td>{{p.qty}}</td><td>{{money(p.revenue)}}</td><td>{{'%.2f'|format(p.hours|float)}}</td><td>{% if p.hours|float > 0 %}{{money((p.revenue|float)/(p.hours|float))}}{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5">No data yet.</td></tr>{% endfor %}</table></div></section>
-<section class="panel"><h2>Revenue by Payment</h2><table>{% for x in payments %}<tr><td>{{x[0]}}</td><td>{{money(x[1])}}</td></tr>{% else %}<tr><td>No data.</td></tr>{% endfor %}</table></section>
+	<section class="panel"><h2>Product performance</h2><div class="table-scroll"><table><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Hours</th><th>$/Hour</th></tr>{% for p in products %}<tr><td>{{p.name}}</td><td>{{p.qty}}</td><td>{{money(p.revenue)}}</td><td>{{'%.2f'|format(p.hours|float)}}</td><td>{% if p.hours|float > 0 %}{{money((p.revenue|float)/(p.hours|float))}}{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5">No data yet.</td></tr>{% endfor %}</table></div></section>
+	<section class="panel"><h2>Revenue by payment method</h2><table>{% for x in payments %}<tr><td>{{x[0]}}</td><td>{{money(x[1])}}</td></tr>{% else %}<tr><td>No data.</td></tr>{% endfor %}</table></section>
 </div>
 <div class="grid analytics-tables">
-<section class="panel"><h2>Top Buyers</h2><div class="table-scroll"><table><tr><th>Buyer</th><th>Purchases</th><th>Spent</th></tr>{% for x in top_buyers %}<tr><td>{{x.name}}</td><td>{{x.purchases}}</td><td>{{money(x.spent)}}</td></tr>{% else %}<tr><td colspan="3">No customer sales yet.</td></tr>{% endfor %}</table></div></section>
-<section class="panel"><h2>Top Add-ons</h2><div class="table-scroll"><table><tr><th>Add-on</th><th>Qty</th><th>Revenue</th></tr>{% for x in top_addons %}<tr><td>{{x.name}}</td><td>{{x.qty}}</td><td>{{money(x.revenue)}}</td></tr>{% else %}<tr><td colspan="3">No add-on sales yet.</td></tr>{% endfor %}</table></div></section>
+	<section class="panel"><h2>Top buyers</h2><div class="table-scroll"><table><tr><th>Buyer</th><th>Paid orders</th><th>Spent</th></tr>{% for x in top_buyers %}<tr><td>{{x.name}}</td><td>{{x.purchases}}</td><td>{{money(x.spent)}}</td></tr>{% else %}<tr><td colspan="3">No customer sales yet.</td></tr>{% endfor %}</table></div></section>
+	<section class="panel"><h2>Top add-ons</h2><div class="table-scroll"><table><tr><th>Add-on</th><th>Qty</th><th>Revenue</th></tr>{% for x in top_addons %}<tr><td>{{x.name}}</td><td>{{x.qty}}</td><td>{{money(x.revenue)}}</td></tr>{% else %}<tr><td colspan="3">No add-on sales yet.</td></tr>{% endfor %}</table></div></section>
+</div>
+<div class="grid analytics-tables">
+	<section class="panel"><h2>Longest active subscribers</h2><div class="table-scroll"><table><tr><th>Customer</th><th>Since</th><th>Tenure</th></tr>{% for subscriber in longest_subscribers %}<tr><td>{{subscriber.name}}</td><td>{{subscriber.started.strftime('%b %d, %Y')}}</td><td>{{subscriber.days}} days</td></tr>{% else %}<tr><td colspan="3">No active subscriptions yet.</td></tr>{% endfor %}</table></div></section>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
-const purple = '#8b5cf6';
+const chartPalette = ['#287c65','#dd8a45','#606cb0','#c55259','#8a68ad','#5493a1','#ac9a39','#596879'];
 const labels = {{ monthly_revenue|map(attribute='month')|list|tojson }};
 const revenue = {{ monthly_revenue|map(attribute='revenue')|list|tojson }};
-new Chart(document.getElementById('revenueChart'), {type:'line',data:{labels,datasets:[{label:'Revenue',data:revenue,borderColor:purple,backgroundColor:'rgba(139,92,246,.12)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}});
+const orders = {{ monthly_orders|map(attribute='orders')|list|tojson }};
+new Chart(document.getElementById('revenueChart'), {type:'line',data:{labels,datasets:[{label:'Revenue',data:revenue,borderColor:chartPalette[0],backgroundColor:'rgba(40,124,101,.12)',fill:true,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}});
+new Chart(document.getElementById('ordersChart'), {type:'bar',data:{labels,datasets:[{label:'Orders',data:orders,backgroundColor:chartPalette[1],borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
 const productLabels={{ products[:8]|map(attribute='name')|list|tojson }}; const productValues={{ products[:8]|map(attribute='revenue')|list|map('float')|list|tojson }};
-new Chart(document.getElementById('productChart'), {type:'bar',data:{labels:productLabels,datasets:[{label:'Revenue',data:productValues,backgroundColor:purple,borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}});
+new Chart(document.getElementById('productChart'), {type:'bar',data:{labels:productLabels,datasets:[{label:'Revenue',data:productValues,backgroundColor:chartPalette[0],borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}});
 const platformLabels={{ platforms|map(attribute='name')|list|tojson }}; const platformValues={{ platforms|map(attribute='revenue')|list|tojson }};
-new Chart(document.getElementById('platformChart'), {type:'doughnut',data:{labels:platformLabels,datasets:[{data:platformValues,backgroundColor:['#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#ede9fe']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+new Chart(document.getElementById('platformChart'), {type:'doughnut',data:{labels:platformLabels,datasets:[{data:platformValues,backgroundColor:chartPalette}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+const addonLabels={{ top_addons|map(attribute='name')|list|tojson }}; const addonValues={{ top_addons|map(attribute='revenue')|list|map('float')|list|tojson }};
+new Chart(document.getElementById('addonChart'), {type:'bar',data:{labels:addonLabels,datasets:[{label:'Revenue',data:addonValues,backgroundColor:chartPalette[2],borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()}}}}});
+const subscriptionLabels={{ subscription_statuses|map(attribute='status')|list|tojson }}; const subscriptionValues={{ subscription_statuses|map(attribute='count')|list|tojson }};
+new Chart(document.getElementById('subscriptionChart'), {type:'doughnut',data:{labels:subscriptionLabels,datasets:[{data:subscriptionValues,backgroundColor:chartPalette}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+new Chart(document.getElementById('deliveryChart'), {type:'doughnut',data:{labels:['Delivery','Standard'],datasets:[{data:[{{delivered_orders}},{{standard_orders}}],backgroundColor:[chartPalette[3],chartPalette[5]]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 </script>
 {% endblock %}

@@ -5,11 +5,17 @@
 <section class="panel account-settings-panel">
     <h2>Public profile</h2>
     <p class="muted">Your email is your sign-in and password recovery address. Your username forms your public profile URL.</p>
-    <form method="post" class="form account-settings-form">
+    <form method="post" class="form account-settings-form" enctype="multipart/form-data">
         <input type="hidden" name="version_id" value="{{account.version_id}}">
         <label>Username<input name="username" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" autocomplete="username" value="{{account.username}}" required></label>
         <label>Email<input type="email" name="email" autocomplete="email" value="{{account.email}}" required></label>
         <label>Display name<input name="display_name" maxlength="120" value="{{account.display_name or ''}}" placeholder="Optional"></label>
+        <div class="profile-image-control">
+            <span>Seller profile picture</span>
+            {% if account.profile_image %}<img class="profile-image-preview" src="{{url_for('static', filename=account.profile_image)}}" alt="Current profile picture">{% endif %}
+            <label>Upload image<input type="file" name="profile_image" accept="image/png,image/jpeg,image/webp"></label>
+            {% if account.profile_image %}<label class="check"><input type="checkbox" name="remove_profile_image" value="1"> Remove current picture</label>{% endif %}
+        </div>
         <label>Bio<textarea name="bio" maxlength="2000" rows="5" placeholder="Tell customers about yourself, your work, and how to reach you.">{{account.bio or ''}}</textarea><span class="muted">Links are clickable on your public profile. HTML is treated as text.</span></label>
         <fieldset class="notification-preferences"><legend>Sale notifications</legend>
             <label class="check"><input type="checkbox" name="banner_notifications" value="1" {% if account.banner_notifications %}checked{% endif %}> Show in-site notification banners</label>
@@ -28,7 +34,7 @@
 <section class="panel account-settings-panel developer-support-panel">
     <h2>Support development</h2>
     {% set developer_return_to = 'account_settings' %}
-    {% set developer_show_contact = true %}
+    {% set developer_show_contact = not current_creator.disable_content_contact %}
     {% include 'developer_support.html' %}
 </section>
 {% if not current_creator.is_admin %}

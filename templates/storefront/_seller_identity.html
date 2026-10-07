@@ -1,1 +1,6 @@
-{% if seller.is_active %}<span class="seller-active-dot" role="img" aria-label="Available" title="Available"></span>{% endif %}{{seller.display_name or seller.username}}
+{% set use_large_avatar = seller_avatar_large|default(false) %}
+<span class="seller-identity">
+	{% if seller.profile_image %}<img class="{{'seller-avatar-large' if use_large_avatar else 'seller-avatar-small'}}" src="{{url_for('static', filename=seller.profile_image)}}" alt="" loading="lazy">{% endif %}
+	{% if seller.is_active %}<span class="seller-active-dot" role="img" aria-label="Available" title="Available"></span>{% endif %}
+	<span>{{seller.display_name or seller.username}}</span>
+</span>
