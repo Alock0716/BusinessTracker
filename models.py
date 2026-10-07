@@ -1,4 +1,5 @@
 from datetime import datetime
+from MySQLdb import Timestamp
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -191,8 +192,8 @@ class ProductTag(db.Model):
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('creator_account.id'), nullable=False)
-    sale_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    sale_date = db.Column(db.TIMESTAMP, default=Timestamp, nullable=False)
+    created_at = db.Column(db.TIMESTAMP, default=Timestamp, nullable=False)
     due_date = db.Column(db.Date)
     sale_category = db.Column(db.String(120))
     status = db.Column(db.String(30), nullable=False, default='New')
