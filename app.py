@@ -429,6 +429,9 @@ def _migrate_tenant_schema(legacy_creator_id):
             ))
     db.session.commit()
 
+def _migration_datetime_type(dialect_name):
+    return 'TIMESTAMP' if dialect_name == 'postgresql' else 'DATETIME'
+
 with app.app_context():
     db.create_all()
     if db.engine.dialect.name == 'sqlite':
@@ -477,13 +480,14 @@ with app.app_context():
             db.session.execute(text(
                 f'ALTER TABLE creator_account ADD COLUMN {column_name} {definition}'
             ))
+    datetime_column_type = _migration_datetime_type(db.engine.dialect.name)
     creator_stripe_migrations = {
         'stripe_account_id': 'VARCHAR(255)',
         'stripe_customer_id': 'VARCHAR(255)',
         'stripe_subscription_id': 'VARCHAR(255)',
         'stripe_subscription_checkout_session_id': 'VARCHAR(255)',
         'stripe_subscription_status': "VARCHAR(40) NOT NULL DEFAULT 'inactive'",
-        'stripe_subscription_period_end': 'DATETIME',
+        'stripe_subscription_period_end': datetime_column_type,
         'subscription_exempt': 'BOOLEAN NOT NULL DEFAULT FALSE',
         'stripe_charges_enabled': 'BOOLEAN NOT NULL DEFAULT FALSE',
         'stripe_details_submitted': 'BOOLEAN NOT NULL DEFAULT FALSE',
@@ -563,7 +567,7 @@ with app.app_context():
         db.session.commit()
     sale_columns = {column['name'] for column in inspect(db.engine).get_columns('sale')}
     sale_migrations = {
-        'created_at': 'DATETIME',
+        'created_at': datetime_column_type,
         'due_date': 'DATE',
         'sale_category': 'VARCHAR(120)',
         'status': "VARCHAR(30) NOT NULL DEFAULT 'New'",
