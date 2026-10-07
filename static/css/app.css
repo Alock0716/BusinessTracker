@@ -2784,15 +2784,21 @@ nav a:hover {
 .public-footer-tip .developer-tip-form input { width: 100%; }
 .public-footer-tip .developer-tip-form button { min-height: 38px; }
 .buyer-tip-banner {
+  position: static;
+  inset: auto;
   display: grid;
-  gap: 10px;
-  max-width: 1160px;
-  margin: 14px auto;
-  padding: 12px 16px;
-  background: #f2f8f4;
-  border: 1px solid #c8dfd0;
-  border-left: 4px solid #2b9b63;
-  border-radius: 6px;
+  gap: 8px;
+  width: min(1132px, calc(100% - 48px));
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  margin: 16px auto 0;
+  padding: 0.75rem 1rem;
+  background: #e8f4ef;
+  border: 0;
+  border-left: 4px solid #287c65;
+  border-radius: 0;
+  color: #183c32;
 }
 .buyer-tip-banner[hidden] { display: none; }
 .buyer-tip-banner-heading {
@@ -2801,20 +2807,34 @@ nav a:hover {
   justify-content: space-between;
   gap: 12px;
 }
+.buyer-tip-banner-heading strong { color: #183c32; }
 .buyer-tip-banner .developer-support-content {
   max-width: none;
   margin-top: 0;
 }
 .buyer-tip-banner .developer-support-content > p { display: none; }
+.buyer-tip-banner .muted { color: #183c32; }
 .buyer-tip-banner .developer-tip-form { align-items: end; }
+.buyer-tip-banner .developer-tip-form label { color: #183c32; }
+.buyer-tip-banner .developer-tip-form input {
+  color: #20242b;
+  background: #fff;
+  border-color: #899b94;
+}
+.buyer-tip-banner .developer-tip-form button { color: #fff; }
+.buyer-tip-banner .developer-tip-form button:disabled {
+  opacity: 1;
+  background: #586b64;
+  color: #fff;
+}
 .buyer-tip-dismiss-form { display: none; }
 .buyer-tip-banner .icon-button {
   width: 32px;
   height: 32px;
-  border: 1px solid #c8dfd0;
+  border: 1px solid #9dbbb0;
   border-radius: 5px;
   background: #fff;
-  color: #315f51;
+  color: #183c32;
   cursor: pointer;
 }
 .developer-support-content {
@@ -2886,6 +2906,7 @@ nav a:hover {
   .public-footer-tip .developer-tip-form label {
     grid-column: 1 / -1;
   }
+  .buyer-tip-banner { width: calc(100% - 24px); }
 }
 .public-purchase-details {
   margin-top: 12px;

@@ -242,6 +242,7 @@ class Sale(db.Model):
         db.Index('ix_sale_owner_due', 'owner_id', 'due_date'),
         db.Index('ix_sale_owner_status_paid', 'owner_id', 'status', 'paid'),
         db.Index('ix_sale_owner_customer', 'owner_id', 'customer_id'),
+        db.Index('ix_sale_store_customer_created', 'store_customer_id', 'created_at', 'id'),
     )
     __mapper_args__ = {'version_id_col': version_id}
     platform = db.relationship('Platform')

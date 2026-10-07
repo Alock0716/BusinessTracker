@@ -369,10 +369,19 @@ def store_customer_account():
     buyer = g.store_customer
     if buyer is None:
         return redirect(url_for('store_customer_login'))
-    purchases = db.session.query(Sale, CreatorAccount).join(
+    purchases_query = db.session.query(Sale, CreatorAccount).join(
         CreatorAccount, CreatorAccount.id == Sale.owner_id
-    ).filter(Sale.store_customer_id == buyer.id).order_by(Sale.created_at.desc()).all()
-    return render_template('customer_account.html', buyer=buyer, purchases=purchases)
+    ).filter(Sale.store_customer_id == buyer.id).options(
+        selectinload(Sale.items).joinedload(SaleItem.product),
+    )
+    pagination = purchases_query.order_by(Sale.created_at.desc(), Sale.id.desc()).paginate(
+        page=max(request.args.get('page', 1, type=int), 1), per_page=25, error_out=False
+    )
+    return render_template(
+        'customer_account.html', buyer=buyer, purchases=pagination.items, pagination=pagination,
+        previous_url=url_for('store_customer_account', page=pagination.prev_num) if pagination.has_prev else None,
+        next_url=url_for('store_customer_account', page=pagination.next_num) if pagination.has_next else None,
+    )
 
 @app.route('/notifications')
 def notifications():
@@ -787,6 +796,9 @@ with app.app_context():
             db.session.execute(text(f'ALTER TABLE sale ADD COLUMN {column_name} {definition}'))
     db.session.execute(text('UPDATE sale SET created_at = sale_date WHERE created_at IS NULL'))
     db.session.commit()
+    db.Index(
+        'ix_sale_store_customer_created', Sale.store_customer_id, Sale.created_at, Sale.id
+    ).create(bind=db.engine, checkfirst=True)
     addon_columns = {column['name'] for column in inspect(db.engine).get_columns('product_addon')}
     if 'price_mode' not in addon_columns:
         db.session.execute(text(
@@ -1376,7 +1388,9 @@ def storefront():
     query = request.args.get('q', '').strip()
     products_query = db.session.query(Product, CreatorAccount, Category).join(
         CreatorAccount, CreatorAccount.id == Product.owner_id
-    ).outerjoin(Category, (Category.id == Product.category_id) & (Category.owner_id == Product.owner_id)).filter(
+    ).outerjoin(Category, (Category.id == Product.category_id) & (Category.owner_id == Product.owner_id)).options(
+        selectinload(Product.fields), selectinload(Product.addons), selectinload(Product.bundles),
+    ).filter(
         Product.active.is_(True), Product.is_public.is_(True), CreatorAccount.is_approved.is_(True),
         _seller_subscription_access(),
     )
@@ -1401,16 +1415,17 @@ def storefront():
             CreatorAccount.username
         ).limit(20).all()
     else:
-        sellers = CreatorAccount.query.filter_by(is_approved=True).filter(
-            _seller_subscription_access()
-        ).order_by(CreatorAccount.username).limit(20).all()
+        sellers = []
     available_sellers = CreatorAccount.query.filter_by(
         is_active=True, is_approved=True
     ).filter(_seller_subscription_access()).order_by(
         CreatorAccount.display_name, CreatorAccount.username
     ).limit(20).all()
     product_results = products_query.order_by(CreatorAccount.username, Product.name).limit(60).all()
-    board_results = boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(30).all()
+    board_results = (
+        boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(30).all()
+        if query else []
+    )
     return render_template(
         'storefront/index.html', query=query, sellers=sellers, available_sellers=available_sellers,
         product_results=product_results, board_results=board_results,
@@ -1422,7 +1437,10 @@ def seller_store(username):
         func.lower(CreatorAccount.username) == username.lower(), CreatorAccount.is_approved.is_(True),
         _seller_subscription_access(),
     ).first_or_404()
-    products = Product.query.filter_by(owner_id=seller.id, active=True, is_public=True).order_by(
+    products = Product.query.options(
+        joinedload(Product.category), selectinload(Product.fields),
+        selectinload(Product.addons), selectinload(Product.bundles),
+    ).filter_by(owner_id=seller.id, active=True, is_public=True).order_by(
         Product.category_id, Product.name
     ).all()
     board_rows = db.session.query(Leaderboard, func.count(LeaderboardEntry.id).label('entry_count')).outerjoin(

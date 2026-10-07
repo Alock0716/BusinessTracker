@@ -33,7 +33,7 @@
         {% for category,message in messages %}<div class="public-flash flash {{category}}">{{message}}</div>{% endfor %}
     {% endwith %}
     {% if current_store_customer and show_buyer_tip_banner %}
-    <aside class="buyer-tip-banner" data-remaining-ms="{{buyer_tip_banner_remaining_ms}}" aria-label="Tip the developer">
+    <aside class="buyer-tip-banner sale-notification-banner" data-remaining-ms="{{buyer_tip_banner_remaining_ms}}" aria-label="Tip the developer">
         <div class="buyer-tip-banner-heading"><strong>Tip the developer</strong><button type="button" class="icon-button" aria-label="Dismiss tip banner" onclick="this.closest('.buyer-tip-banner').querySelector('.buyer-tip-dismiss-form').requestSubmit()">×</button></div>
         {% set developer_return_to = 'storefront' %}
         {% set developer_show_contact = false %}

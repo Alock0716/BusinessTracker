@@ -26,6 +26,7 @@
             </tbody>
         </table>
     </div>
+    {% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Purchase history pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
     {% else %}<p class="public-empty">Purchases made while signed in will appear here. Guest purchases are not linked to this account.</p>{% endif %}
 </section>
 {% endblock %}
