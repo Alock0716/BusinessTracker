@@ -3,7 +3,7 @@
 {% block heading %}Seller Subscription{% endblock %}
 {% block content %}
 <section class="panel account-settings-panel">
-    <h2>Solaraia Creator Suite access</h2>
+    <h2>Solara Creator Suite access</h2>
     {% if billing_exempt %}
     {% if account.is_admin %}<p>Administrator accounts are exempt from seller subscriptions.</p>
     {% else %}<p>An administrator waived your seller subscription fee.</p>{% if account.stripe_subscription_status in ('active', 'trialing') and account.stripe_subscription_period_end %}<p class="muted">Your current paid period ends {{account.stripe_subscription_period_end.strftime('%b %d, %Y')}}; renewal is scheduled to stop.</p>{% endif %}{% endif %}

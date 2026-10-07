@@ -353,7 +353,7 @@ def forgot_password():
             reset_url = url_for('reset_password', token=token, _external=True)
             _send_email(
                 account.email,
-                'Reset your Solaraia Creator Suite password',
+                'Reset your Solara Creator Suite password',
                 f'Use this link within one hour to reset your password:\n\n{reset_url}\n\nIf you did not request this, ignore this email.',
             )
         flash('If an account exists for that email, a password reset link will be sent.', 'success')
@@ -2076,7 +2076,7 @@ def developer_tip_checkout():
         'line_items': [{
             'price_data': {
                 'currency': 'usd',
-                'product_data': {'name': 'Tip the Solaraia Creator Suite developer'},
+                'product_data': {'name': 'Tip the Solara Creator Suite developer'},
                 'unit_amount': _stripe_cents(amount),
             },
             'quantity': 1,

@@ -1,4 +1,4 @@
-# Solaraia Creator Suite
+# Solara Creator Suite
 
 A real Flask + SQLAlchemy business sales tracking application. It uses SQLite by default and can be pointed at MySQL/PostgreSQL through `DATABASE_URL`.
 
