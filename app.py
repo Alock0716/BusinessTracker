@@ -108,7 +108,12 @@ def integrity_write_error(error):
 def _form_version_matches(record):
     submitted_version = request.form.get('version_id', type=int)
     if submitted_version is not None and submitted_version != record.version_id:
-        flash('This record changed in another session. Review the latest version and try again.', 'error')
+        flash(
+            f'This record changed in another session (form version {submitted_version}; '
+            f'current version {record.version_id}). Your changes were not saved. '
+            'Reopen the current sale and reapply your edits.',
+            'error',
+        )
         return False
     return True
 
