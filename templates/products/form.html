@@ -2,44 +2,68 @@
 {% block title %}{{'Edit' if product else 'New'}} Product{% endblock %}
 {% block heading %}{{'Edit' if product else 'New'}} Product{% endblock %}
 {% block content %}
-<form method="post" class="panel form">
+<form method="post" class="panel form product-form">
+  {% if product %}<input type="hidden" name="version_id" value="{{product.version_id}}">{% endif %}
   <label>Name<input name="name" required value="{{product.name if product else ''}}"></label>
   <label>Category<select name="category_id"><option value="">None</option>{% for c in categories %}<option value="{{c.id}}" {% if product and product.category_id==c.id %}selected{% endif %}>{{c.name}}</option>{% endfor %}</select></label>
   <label>Base Price<input type="number" step="0.01" name="base_price" value="{{product.base_price if product else 0}}"></label>
   <label>Description<textarea name="description">{{product.description if product else ''}}</textarea></label>
+  <label>Product tags<input name="tags" maxlength="500" value="{{(product.tags|map(attribute='name')|join(', ')) if product else ''}}" placeholder="e.g. Digital, Rush, Commission"><span class="muted">Separate tags with commas. Use these to find products and related sales.</span></label>
+  <label class="check visibility-toggle"><input type="checkbox" name="is_public" value="1" {% if not product or product.is_public %}checked{% endif %}> Show on public storefront</label>
 
   <h2>Trackable Items</h2>
-  <p class="muted">Information you want to capture for this product when a sale is recorded. Examples: size, color, material, project type, measurement, customer preference, or service details.</p>
+  <p class="muted">Capture details that vary for each sale item, such as size, measurements, project codes, or appointment dates. These values are saved with the sale and can be searched in the sales dashboard.</p>
   <div id="fields">
     {% if product %}{% for f in product.fields %}
     <div class="row child-row">
-      <input name="field_name" value="{{f.name}}" placeholder="Trackable item name">
-      <select name="field_type"><option {% if f.field_type=='text' %}selected{% endif %}>text</option><option {% if f.field_type=='number' %}selected{% endif %}>number</option><option {% if f.field_type=='decimal' %}selected{% endif %}>decimal</option><option {% if f.field_type=='date' %}selected{% endif %}>date</option></select>
-      <input name="field_unit" value="{{f.unit or ''}}" placeholder="Unit (optional)">
+      <label>Field name<input name="field_name" value="{{f.name}}" placeholder="e.g. Size or Session code"></label>
+      <label>Input type<select name="field_type"><option {% if f.field_type=='text' %}selected{% endif %}>text</option><option {% if f.field_type=='number' %}selected{% endif %}>number</option><option {% if f.field_type=='decimal' %}selected{% endif %}>decimal</option><option {% if f.field_type=='date' %}selected{% endif %}>date</option></select></label>
+      <label>Unit (optional)<input name="field_unit" value="{{f.unit or ''}}" placeholder="e.g. inches"></label>
       <label class="check"><input type="checkbox" name="field_required" value="{{loop.index0}}" {% if f.required %}checked{% endif %}> Required</label>
-      <button type="button" class="danger button secondary" onclick="this.parentElement.remove()">Remove</button>
+      <button type="button" class="danger button secondary" onclick="this.parentElement.remove()">Remove item</button>
     </div>{% endfor %}{% endif %}
   </div>
-  <button type="button" class="secondary button" onclick="addField()">+ Add Trackable Item</button>
+  <button type="button" class="secondary button" onclick="addProductField()">+ Add Trackable Item</button>
 
   <h2>Add-ons</h2>
-  <p class="muted">Optional extras attached to this product. Each add-on has its own price and additional labor time.</p>
+  <p class="muted">Add optional extras to this product. Choose a one-time charge or a rate multiplied by the sale quantity; use the quantity unit for timed rates such as minutes or hours.</p>
   <div id="addons">
     {% if product %}{% for a in product.addons %}
     <div class="child-card">
-      <div class="row"><input name="addon_name" value="{{a.name}}" placeholder="Add-on name"><input name="addon_price" type="number" step="0.01" value="{{a.price}}" placeholder="Price"><input name="addon_labor" type="number" step="0.01" value="{{a.labor_hours}}" placeholder="Extra labor hours"><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove</button></div>
-      <textarea name="addon_description" placeholder="Optional description">{{a.description or ''}}</textarea>
+      <div class="row">
+        <label>Add-on name<input name="addon_name" value="{{a.name}}" placeholder="e.g. Rush delivery"></label>
+        <label>Price<input name="addon_price" type="number" step="0.01" value="{{a.price}}" placeholder="0.00"></label>
+        <label>Extra labor hours<input name="addon_labor" type="number" step="0.01" value="{{a.labor_hours}}" placeholder="0"></label>
+        <button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove add-on</button>
+      </div>
+      <div class="addon-pricing-grid">
+        <label>Charge model
+          <select name="addon_price_mode">
+            <option value="flat" {{'selected' if a.price_mode == 'flat' else ''}}>Flat per sale item</option>
+            <option value="per_quantity" {{'selected' if a.price_mode != 'flat' else ''}}>Per item quantity</option>
+          </select>
+        </label>
+        <label>Quantity unit<input name="addon_quantity_unit" maxlength="40" value="{{a.quantity_unit or ''}}" placeholder="e.g. minutes, hours"></label>
+      </div>
+      <label class="product-child-description">Description (optional)<textarea name="addon_description" placeholder="What does this extra include?">{{a.description or ''}}</textarea></label>
     </div>{% endfor %}{% endif %}
   </div>
-  <button type="button" class="secondary button" onclick="addAddon()">+ Add Add-on</button>
+  <button type="button" class="secondary button" onclick="addProductAddon()">+ Add Add-on</button>
 
   <h2>Bundle / Pricing Options</h2>
-  <p class="muted">Create alternate pricepoints for the same product. The amount and unit can represent quantity, duration, time, distance, sessions, or any other basis.</p>
+  <p class="muted">Create package or duration options with their own price, such as a 30-minute session or a set of three items. Select one of these options when recording a sale.</p>
   <div id="bundles">
     {% if product %}{% for b in product.bundles %}
     <div class="child-card">
-      <div class="row"><input name="bundle_name" value="{{b.name}}" placeholder="Option name"><input name="bundle_amount" type="number" step="0.01" value="{{b.amount}}" placeholder="Amount"><input name="bundle_unit" value="{{b.unit or ''}}" placeholder="Unit (e.g. days, sessions, items)"><input name="bundle_price" type="number" step="0.01" value="{{b.price}}" placeholder="Price"><input name="bundle_labor" type="number" step="0.01" value="{{b.labor_hours}}" placeholder="Labor hours"><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove</button></div>
-      <textarea name="bundle_description" placeholder="Optional description">{{b.description or ''}}</textarea>
+      <div class="row">
+        <label>Option name<input name="bundle_name" value="{{b.name}}" placeholder="e.g. 30-minute session"></label>
+        <label>Amount<input name="bundle_amount" type="number" step="0.01" value="{{b.amount}}" placeholder="1"></label>
+        <label>Unit<input name="bundle_unit" value="{{b.unit or ''}}" placeholder="e.g. minutes, items"></label>
+        <label>Price<input name="bundle_price" type="number" step="0.01" value="{{b.price}}" placeholder="0.00"></label>
+        <label>Labor hours<input name="bundle_labor" type="number" step="0.01" value="{{b.labor_hours}}" placeholder="0"></label>
+        <button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove option</button>
+      </div>
+      <label class="product-child-description">Description (optional)<textarea name="bundle_description" placeholder="What does this package include?">{{b.description or ''}}</textarea></label>
     </div>{% endfor %}{% endif %}
   </div>
   <button type="button" class="secondary button" onclick="addBundle()">+ Add Pricing Option</button>
@@ -47,8 +71,8 @@
   <div class="actions"><button class="button" type="submit">Save Product</button><a class="button secondary" href="{{url_for('products')}}">Cancel</a></div>
 </form>
 <script>
-function addField(){document.getElementById('fields').insertAdjacentHTML('beforeend', `<div class="row child-row"><input name="field_name" placeholder="Trackable item name"><select name="field_type"><option>text</option><option>number</option><option>decimal</option><option>date</option></select><input name="field_unit" placeholder="Unit (optional)"><label class="check"><input type="checkbox" name="field_required" value="new"> Required</label><button type="button" class="danger button secondary" onclick="this.parentElement.remove()">Remove</button></div>`)}
-function addAddon(){document.getElementById('addons').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><input name="addon_name" placeholder="Add-on name"><input name="addon_price" type="number" step="0.01" placeholder="Price"><input name="addon_labor" type="number" step="0.01" placeholder="Extra labor hours"><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove</button></div><textarea name="addon_description" placeholder="Optional description"></textarea></div>`)}
-function addBundle(){document.getElementById('bundles').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><input name="bundle_name" placeholder="Option name"><input name="bundle_amount" type="number" step="0.01" value="1" placeholder="Amount"><input name="bundle_unit" placeholder="Unit (e.g. days, sessions, items)"><input name="bundle_price" type="number" step="0.01" placeholder="Price"><input name="bundle_labor" type="number" step="0.01" placeholder="Labor hours"><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove</button></div><textarea name="bundle_description" placeholder="Optional description"></textarea></div>`)}
+function addProductField(){document.getElementById('fields').insertAdjacentHTML('beforeend', `<div class="row child-row"><label>Field name<input name="field_name" placeholder="e.g. Size or Session code"></label><label>Input type<select name="field_type"><option>text</option><option>number</option><option>decimal</option><option>date</option></select></label><label>Unit (optional)<input name="field_unit" placeholder="e.g. inches"></label><label class="check"><input type="checkbox" name="field_required" value="new"> Required</label><button type="button" class="danger button secondary" onclick="this.parentElement.remove()">Remove item</button></div>`)}
+function addProductAddon(){document.getElementById('addons').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><label>Add-on name<input name="addon_name" placeholder="e.g. Rush delivery"></label><label>Price<input name="addon_price" type="number" step="0.01" placeholder="0.00"></label><label>Extra labor hours<input name="addon_labor" type="number" step="0.01" placeholder="0"></label><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove add-on</button></div><div class="addon-pricing-grid"><label>Charge model<select name="addon_price_mode"><option value="flat">Flat per sale item</option><option value="per_quantity" selected>Per item quantity</option></select></label><label>Quantity unit<input name="addon_quantity_unit" maxlength="40" placeholder="e.g. minutes, hours"></label></div><label class="product-child-description">Description (optional)<textarea name="addon_description" placeholder="What does this extra include?"></textarea></label></div>`)}
+function addBundle(){document.getElementById('bundles').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><label>Option name<input name="bundle_name" placeholder="e.g. 30-minute session"></label><label>Amount<input name="bundle_amount" type="number" step="0.01" value="1" placeholder="1"></label><label>Unit<input name="bundle_unit" placeholder="e.g. minutes, items"></label><label>Price<input name="bundle_price" type="number" step="0.01" placeholder="0.00"></label><label>Labor hours<input name="bundle_labor" type="number" step="0.01" placeholder="0"></label><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove option</button></div><label class="product-child-description">Description (optional)<textarea name="bundle_description" placeholder="What does this package include?"></textarea></label></div>`)}
 </script>
 {% endblock %}

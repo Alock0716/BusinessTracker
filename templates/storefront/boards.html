@@ -1,0 +1,31 @@
+{% extends 'public_base.html' %}
+{% block title %}Leaderboards · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-intro public-board-intro">
+    <p class="public-kicker">Community standings</p>
+    <h1>Leaderboards</h1>
+    <p>Follow the scores and see who's climbing the ranks.</p>
+    <form class="public-search-form" method="get" action="{{url_for('public_leaderboards')}}" role="search">
+        {% if seller_username %}<input type="hidden" name="seller" value="{{seller_username}}">{% endif %}
+        <label class="visually-hidden" for="leaderboard-search">Search leaderboards or sellers</label>
+        <input id="leaderboard-search" type="search" name="q" value="{{query}}" placeholder="Search leaderboards or seller usernames" autocomplete="off">
+        <button class="button" type="submit">Search</button>
+    </form>
+</section>
+<section class="public-section">
+    <div class="public-section-heading"><div><p class="public-kicker">{{'Filtered results' if query or seller_username else 'Open to everyone'}}</p><h2>{{'@' ~ seller_username if seller_username else 'All leaderboards'}}</h2></div></div>
+    {% if boards %}
+    <div class="public-board-list">
+        {% for board,seller in boards %}
+        <div class="public-board-row">
+            <span class="public-board-rank">{{'%02d'|format(loop.index)}}</span>
+            <a class="public-board-copy" href="{{url_for('public_leaderboard', username=seller.username, id=board.id)}}"><strong>{{board.name}}</strong>{% if board.description %}<small>{{board.description}}</small>{% endif %}<small>{{board.score_label}}</small></a>
+            <a class="public-board-seller" href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}<small>@{{seller.username}}</small></a>
+            <span class="public-board-order">{{'High to low' if board.sort_order == 'desc' else 'Low to high'}}</span>
+            <a class="public-list-arrow" href="{{url_for('public_leaderboard', username=seller.username, id=board.id)}}" aria-label="View {{board.name}}">›</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}<p class="public-empty">No leaderboards found. Try another search.</p>{% endif %}
+</section>
+{% endblock %}

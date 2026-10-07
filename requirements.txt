@@ -1,6 +1,7 @@
 Flask>=3.0,<4
 Flask-SQLAlchemy>=3.1,<4
 SQLAlchemy>=2.0,<3
+stripe>=11,<20
 
 gunicorn>=23,<24
 psycopg2-binary>=2.9,<3

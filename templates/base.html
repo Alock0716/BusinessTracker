@@ -1,1 +1,46 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}Business Tracker{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}"></head><body><button class="mobile-menu-button" type="button" aria-label="Open navigation" onclick="document.body.classList.toggle('nav-open')">☰</button><div class="mobile-nav-overlay" onclick="document.body.classList.remove('nav-open')"></div><aside><div class="brand">Business Tracker</div><nav><a href="{{url_for('dashboard')}}">Dashboard</a><a href="{{url_for('products')}}">Products</a><a href="{{url_for('sales')}}">Sales</a><a href="{{url_for('customers')}}">Customers</a><a href="{{url_for('analytics')}}">Analytics</a><a href="{{url_for('settings')}}">Settings</a></nav><a class="logout-link" href="{{ url_for('logout') }}">Sign out</a></aside><main><header><h1>{% block heading %}{% endblock %}</h1></header>{% with messages=get_flashed_messages(with_categories=true) %}{% for category,message in messages %}<div class="flash {{category}}">{{message}}</div>{% endfor %}{% endwith %}{% block content %}{% endblock %}</main><script src="{{url_for('static',filename='js/app.js')}}"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>{% block title %}Business Tracker{% endblock %}</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+	<button class="mobile-menu-button" type="button" aria-label="Open navigation" onclick="document.body.classList.toggle('nav-open')">☰</button>
+	<div class="mobile-nav-overlay" onclick="document.body.classList.remove('nav-open')"></div>
+	<aside>
+		<div class="brand">Business Tracker</div>
+		<nav>
+			<a href="{{url_for('storefront')}}">Customer Site</a>
+			{% if current_creator and current_creator.is_admin %}<a href="{{url_for('admin_dashboard')}}">Admin</a>{% endif %}
+			<a href="{{url_for('dashboard')}}">Dashboard</a>
+			<a href="{{url_for('products')}}">Products</a>
+			<a href="{{url_for('sales')}}">Sales</a>
+			<a href="{{url_for('notifications')}}">Notifications{% if unread_notifications %} ({{unread_notifications|length}}){% endif %}</a>
+			<a href="{{url_for('customers')}}">Customers</a>
+			<a href="{{url_for('leaderboards')}}">Leaderboards</a>
+			<a href="{{url_for('analytics')}}">Analytics</a>
+			<a href="{{url_for('settings')}}">Settings</a>
+			<a href="{{url_for('account_settings')}}">Account</a>
+			{% if current_creator and not current_creator.is_admin %}<a href="{{url_for('seller_billing')}}">Subscription</a>{% endif %}
+		</nav>
+		<a class="logout-link" href="{{ url_for('logout') }}">Sign out</a>
+	</aside>
+	<main>
+		<header><h1>{% block heading %}{% endblock %}</h1></header>
+		{% for notification in unread_notifications %}
+			<div class="sale-notification-banner" role="status">
+				<strong>{{notification.title}}</strong> {{notification.message}}
+				<a href="{{url_for('sales')}}">View sales</a>
+				<form method="post" action="{{url_for('notification_read', id=notification.id)}}"><input type="hidden" name="next" value="{{request.full_path}}"><button class="icon-button" type="submit" aria-label="Dismiss notification">×</button></form>
+			</div>
+		{% endfor %}
+		{% with messages=get_flashed_messages(with_categories=true) %}
+			{% for category,message in messages %}<div class="flash {{category}}">{{message}}</div>{% endfor %}
+		{% endwith %}
+		{% block content %}{% endblock %}
+	</main>
+	<script src="{{url_for('static',filename='js/app.js')}}"></script>
+</body>
+</html>

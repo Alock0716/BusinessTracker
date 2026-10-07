@@ -1,0 +1,46 @@
+{% extends 'public_base.html' %}
+{% block title %}{{board.name}} · {{seller.display_name or seller.username}}{% endblock %}
+{% block content %}
+<p class="public-breadcrumb"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a> / Leaderboards</p>
+<section class="public-seller-heading">
+    <p class="public-kicker">{{seller.display_name or seller.username}} · @{{seller.username}} · {{'Highest score first' if board.sort_order == 'desc' else 'Lowest score first'}}</p>
+    <h1>{{board.name}}</h1>
+    {% if board.description %}<p>{{board.description}}</p>{% endif %}
+</section>
+<section class="public-section public-standings">
+    <div class="public-section-heading"><div><p class="public-kicker">Current rankings</p><h2>{{board.score_label}}</h2></div></div>
+    <div class="public-standing-search">
+        <label for="standing-search">Find yourself</label>
+        <input id="standing-search" type="search" placeholder="Search the displayed names" autocomplete="off">
+        <p id="standing-search-status" class="muted" aria-live="polite"></p>
+    </div>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Rank</th><th>Customer</th><th>{{board.score_label}}</th></tr></thead>
+            <tbody>
+                {% for entry in entries %}
+                {% set display_name = entry.customer.username if entry.use_username and entry.customer.username else ('Anonymous' if entry.use_username else entry.customer.name) %}
+                <tr data-standing-name="{{display_name|lower}}"><td>{{loop.index}}</td><td><strong>{{display_name}}</strong></td><td>{{'%.2f'|format(entry.score)}}</td></tr>
+                {% else %}<tr><td colspan="3">No scores have been added yet.</td></tr>{% endfor %}
+                <tr id="standing-no-match" hidden><td colspan="3">No displayed names match your search.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+<script>
+const standingSearch = document.getElementById('standing-search');
+const standingRows = [...document.querySelectorAll('[data-standing-name]')];
+const noStandingMatch = document.getElementById('standing-no-match');
+const standingStatus = document.getElementById('standing-search-status');
+standingSearch.addEventListener('input', () => {
+    const query = standingSearch.value.trim().toLocaleLowerCase();
+    let visibleCount = 0;
+    for (const row of standingRows) {
+        row.hidden = !row.dataset.standingName.includes(query);
+        if (!row.hidden) visibleCount += 1;
+    }
+    noStandingMatch.hidden = !query || visibleCount > 0 || standingRows.length === 0;
+    standingStatus.textContent = query ? `${visibleCount} matching entr${visibleCount === 1 ? 'y' : 'ies'}` : '';
+});
+</script>
+{% endblock %}

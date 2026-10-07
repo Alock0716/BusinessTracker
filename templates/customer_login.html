@@ -1,0 +1,15 @@
+{% extends 'public_base.html' %}
+{% block title %}Buyer Sign In · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth">
+    <p class="public-kicker">Optional buyer account</p>
+    <h1>Sign in to your purchases</h1>
+    <p class="muted">You can still browse and check out as a guest.</p>
+    <form method="post" class="form">
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+        <button class="button" type="submit">Sign In</button>
+    </form>
+    <p class="public-auth-note">New buyer? <a href="{{url_for('store_customer_register')}}">Create an account</a>.</p>
+</section>
+{% endblock %}

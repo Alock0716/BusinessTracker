@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Account Settings{% endblock %}
+{% block heading %}Account Settings{% endblock %}
+{% block content %}
+<section class="panel account-settings-panel">
+    <h2>Public profile</h2>
+    <p class="muted">Your email is your sign-in and password recovery address. Your username forms your public profile URL.</p>
+    <form method="post" class="form account-settings-form">
+        <input type="hidden" name="version_id" value="{{account.version_id}}">
+        <label>Username<input name="username" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" autocomplete="username" value="{{account.username}}" required></label>
+        <label>Email<input type="email" name="email" autocomplete="email" value="{{account.email}}" required></label>
+        <label>Display name<input name="display_name" maxlength="120" value="{{account.display_name or ''}}" placeholder="Optional"></label>
+        <fieldset class="notification-preferences"><legend>Sale notifications</legend>
+            <label class="check"><input type="checkbox" name="banner_notifications" value="1" {% if account.banner_notifications %}checked{% endif %}> Show in-site notification banners</label>
+            <label class="check"><input type="checkbox" name="email_notifications" value="1" {% if account.email_notifications %}checked{% endif %}> Email me when a sale arrives</label>
+        </fieldset>
+        <div class="account-password-section">
+            <h2>Change password</h2>
+            <p class="muted">Leave these fields blank to keep your current password. Password changes require your current password.</p>
+            <label>Current password<input type="password" name="current_password" autocomplete="current-password"></label>
+            <label>New password<input type="password" name="new_password" minlength="10" autocomplete="new-password"></label>
+            <label>Confirm new password<input type="password" name="password_confirm" minlength="10" autocomplete="new-password"></label>
+        </div>
+        <div class="actions"><button class="button">Save Account Settings</button><a class="button secondary" href="{{url_for('settings')}}">Cancel</a></div>
+    </form>
+</section>
+{% if not current_creator.is_admin %}
+<section class="panel account-settings-panel">
+    <h2>Seller subscription</h2>
+    <p class="muted">Status: {{'Waived' if account.subscription_exempt else account.stripe_subscription_status|capitalize}}. Manage your plan and payment method through Stripe.</p>
+    <a class="button secondary" href="{{url_for('seller_billing')}}">Manage subscription</a>
+</section>
+{% endif %}
+{% if current_creator.is_admin or current_creator.subscription_exempt or current_creator.stripe_subscription_status in ('active', 'trialing') %}
+<section class="panel account-settings-panel stripe-seller-settings">
+    <h2>Payments and storefront purchases</h2>
+    <p class="muted">Connect a Stripe Express account to receive menu purchases directly. Guests can check out without a buyer account; connecting Stripe does not add a platform fee.</p>
+    {% if account.stripe_account_id %}
+    <dl class="stripe-status-list">
+        <div><dt>Stripe account</dt><dd>Connected</dd></div>
+        <div><dt>Seller details submitted</dt><dd>{{'Yes' if account.stripe_details_submitted else 'Not yet'}}</dd></div>
+        <div><dt>Charges enabled</dt><dd>{{'Yes' if account.stripe_charges_enabled else 'Not yet'}}</dd></div>
+    </dl>
+    {% else %}<p class="stripe-connect-state">Stripe is not connected.</p>{% endif %}
+    <form method="post" action="{{url_for('stripe_connect_setup')}}" class="stripe-connect-form">
+        <button class="button secondary">{{'Continue Stripe setup' if account.stripe_account_id else 'Connect Stripe'}}</button>
+    </form>
+    <form method="post" action="{{url_for('stripe_purchase_settings')}}" class="stripe-purchase-form">
+        <label class="check"><input type="checkbox" name="accepting_orders" value="1" {% if account.accepting_orders %}checked{% endif %} {% if not account.stripe_charges_enabled or not account.stripe_details_submitted %}disabled{% endif %}> Enable purchases from my public menu</label>
+        <button class="button" {% if not account.stripe_charges_enabled or not account.stripe_details_submitted %}disabled{% endif %}>Save Purchase Setting</button>
+    </form>
+    {% if not account.stripe_charges_enabled or not account.stripe_details_submitted %}<p class="muted">Complete Stripe onboarding before public checkout can be enabled.</p>{% endif %}
+</section>
+{% else %}
+<section class="panel account-settings-panel">
+    <h2>Payments and storefront purchases</h2>
+    <p class="muted">Connect Stripe and enable public purchases after your seller subscription is active.</p>
+    <a class="button secondary" href="{{url_for('seller_billing')}}">Manage subscription</a>
+</section>
+{% endif %}
+{% endblock %}

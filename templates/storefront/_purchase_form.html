@@ -1,0 +1,29 @@
+{% if seller.accepting_orders and seller.stripe_charges_enabled and seller.stripe_details_submitted %}
+{% set active_bundles = product.bundles|selectattr('active')|list %}
+{% set active_addons = product.addons|selectattr('active')|list %}
+<details class="public-purchase-details">
+    <summary>Buy this item</summary>
+    <form method="post" action="{{url_for('public_product_checkout', username=seller.username, product_id=product.id)}}" class="public-purchase-form">
+        <label>Quantity<input type="number" name="quantity" min="1" max="99" step="1" value="1" required></label>
+        {% if active_bundles %}
+        <label>Package
+            <select name="bundle_id"><option value="">Standard · {{money(product.base_price)}}</option>{% for bundle in active_bundles %}<option value="{{bundle.id}}">{{bundle.name}} · {{money(bundle.price)}}</option>{% endfor %}</select>
+        </label>
+        {% endif %}
+        {% if active_addons %}
+        <fieldset class="public-purchase-options"><legend>Add-ons</legend>
+            {% for addon in active_addons %}
+            <div class="public-purchase-addon">
+                <label><input type="checkbox" name="addon_ids" value="{{addon.id}}"><span>{{addon.name}} · {{money(addon.price)}}{% if addon.price_mode == 'flat' %} one-time{% else %} per {{addon.quantity_unit or 'item'}}{% endif %}</span></label>
+                {% if addon.price_mode == 'per_quantity' %}<label class="public-addon-units">{{addon.quantity_unit or 'Units'}}<input type="number" name="addon_quantity_{{addon.id}}" min="1" max="9999" step="1" value="1"></label>{% endif %}
+            </div>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
+        {% for field in product.fields if field.required %}
+        <label>{{field.name}}{% if field.unit %} ({{field.unit}}){% endif %}<input type="{{'number' if field.field_type in ('number', 'decimal') else 'date' if field.field_type == 'date' else 'text'}}" name="field_value_{{field.id}}" {% if field.field_type in ('number', 'decimal') %}step="any"{% endif %} required></label>
+        {% endfor %}
+        <button class="button" type="submit">Continue to secure checkout</button>
+    </form>
+</details>
+{% endif %}

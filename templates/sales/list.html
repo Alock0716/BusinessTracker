@@ -1,1 +1,124 @@
-{% extends 'base.html' %}{% block title %}Sales{% endblock %}{% block heading %}Sales{% endblock %}{% block content %}<div class="toolbar"><a class="button" href="{{url_for('sale_new')}}">+ Record Sale</a></div><section class="panel"><table><tr><th>Date</th><th>Buyer</th><th>Items</th><th>Platform</th><th>Payment</th><th>Total</th><th>Actions</th></tr>{% for s in sales %}<tr><td>{{s.sale_date.strftime('%Y-%m-%d %H:%M')}}</td><td>{{s.customer.name if s.customer else '—'}}</td><td>{% for i in s.items %}{{i.product.name}}{% if i.bundle %} — {{i.bundle.name}}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td><td>{{s.platform.name if s.platform else '—'}}</td><td>{{s.payment_method.name if s.payment_method else '—'}}</td><td>{{money(s.total_amount)}}</td><td><a class="button secondary" href="{{url_for('sale_edit',id=s.id)}}">Edit</a><form class="inline" method="post" action="{{url_for('sale_delete',id=s.id)}}" onsubmit="return confirm('Remove this sale?')"><button class="button secondary danger">Delete</button></form></td></tr>{% else %}<tr><td colspan="7">No sales recorded yet.</td></tr>{% endfor %}</table></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Sales Dashboard{% endblock %}
+{% block heading %}Sales Dashboard{% endblock %}
+{% block content %}
+<div class="sales-toolbar"><p class="muted">Track orders, deadlines, and payments in one place.</p><a class="button" href="{{url_for('sale_new')}}">+ Record Sale</a></div>
+<section class="cards sales-summary">
+	<div><small>Total sales</small><strong>{{summary.total}}</strong></div>
+	<div><small>Open</small><strong>{{summary.open}}</strong></div>
+	<div class="{{'summary-overdue' if summary.overdue else ''}}"><small>Overdue</small><strong>{{summary.overdue}}</strong></div>
+	<div><small>Not paid</small><strong>{{summary.unpaid}}</strong></div>
+</section>
+<section class="panel sales-filter-panel">
+	<details class="sales-filter-disclosure" {% if active_filter_count %}open{% endif %}>
+		<summary><span>Search and filters</span><span class="sales-filter-count">{{active_filter_count ~ ' active' if active_filter_count else 'Open options'}}</span></summary>
+	<form method="get" action="{{url_for('sales')}}" class="sales-filters">
+		<label class="sales-search">Search
+			<input type="search" name="q" value="{{query}}" placeholder="Customer, product, category, bundle, add-on, or field">
+		</label>
+		<label>Status
+			<select name="status"><option value="">All statuses</option>{% for option in sale_statuses %}<option value="{{option}}" {{'selected' if status_filter == option else ''}}>{{option}}</option>{% endfor %}</select>
+		</label>
+		<label>Payment
+			<select name="paid"><option value="">All</option><option value="unpaid" {{'selected' if paid_filter == 'unpaid' else ''}}>Not paid</option><option value="paid" {{'selected' if paid_filter == 'paid' else ''}}>Paid</option></select>
+		</label>
+		<label>Sale category
+			<select name="category"><option value="">All categories</option>{% for category in categories %}<option value="{{category}}" {{'selected' if category_filter == category else ''}}>{{category}}</option>{% endfor %}</select>
+		</label>
+		<label>Product type
+			<select name="product_type"><option value="">All product types</option>{% for product_type in product_types %}<option value="{{product_type.id}}" {{'selected' if product_type_filter == product_type.id else ''}}>{{product_type.name}}</option>{% endfor %}</select>
+		</label>
+		<label>Product tag
+			<select name="tag"><option value="">All product tags</option>{% for tag in product_tags %}<option value="{{tag.id}}" {{'selected' if product_tag_filter == tag.id else ''}}>{{tag.name}}</option>{% endfor %}</select>
+		</label>
+		<label>Contains add-ons
+			<select name="has_addons"><option value="">Any</option><option value="yes" {{'selected' if has_addons_filter == 'yes' else ''}}>Yes</option><option value="no" {{'selected' if has_addons_filter == 'no' else ''}}>No</option></select>
+		</label>
+		<label>Specific add-on
+			<select name="addon"><option value="">Any add-on</option>{% for addon in addons %}<option value="{{addon.id}}" {{'selected' if addon_filter == addon.id else ''}}>{{addon.product.name}} / {{addon.name}}</option>{% endfor %}</select>
+		</label>
+		<label>Bundle
+			<select name="bundle"><option value="">Any bundle</option>{% for bundle in bundles %}<option value="{{bundle.id}}" {{'selected' if bundle_filter == bundle.id else ''}}>{{bundle.product.name}} / {{bundle.name}}</option>{% endfor %}</select>
+		</label>
+		<label>Trackable field
+			<select name="field"><option value="">Any field</option>{% for field in trackable_fields %}<option value="{{field.id}}" {{'selected' if field_filter == field.id else ''}}>{{field.product.name}} / {{field.name}}</option>{% endfor %}</select>
+		</label>
+		<label>Sort by
+			<select name="sort">
+				<option value="created_desc" {{'selected' if sort == 'created_desc' else ''}}>Created: newest</option>
+				<option value="created_asc" {{'selected' if sort == 'created_asc' else ''}}>Created: oldest</option>
+				<option value="due_asc" {{'selected' if sort == 'due_asc' else ''}}>Due date: soonest</option>
+				<option value="due_desc" {{'selected' if sort == 'due_desc' else ''}}>Due date: latest</option>
+				<option value="type_asc" {{'selected' if sort == 'type_asc' else ''}}>Type: A to Z</option>
+				<option value="type_desc" {{'selected' if sort == 'type_desc' else ''}}>Type: Z to A</option>
+				<option value="price_desc" {{'selected' if sort == 'price_desc' else ''}}>Price: high to low</option>
+				<option value="price_asc" {{'selected' if sort == 'price_asc' else ''}}>Price: low to high</option>
+			</select>
+		</label>
+		<label>Due status
+			<select name="due_state"><option value="">Any due date</option><option value="due_today" {{'selected' if due_state_filter == 'due_today' else ''}}>Due Today</option><option value="overdue" {{'selected' if due_state_filter == 'overdue' else ''}}>Overdue</option><option value="on_schedule" {{'selected' if due_state_filter == 'on_schedule' else ''}}>On Schedule</option></select>
+		</label>
+		<div class="sales-filter-actions"><button class="button">Apply filters</button><a class="button secondary" href="{{url_for('sales')}}">Clear</a></div>
+	</form>
+	</details>
+</section>
+<section class="panel sales-table-panel">
+	<div class="sales-results-heading"><h2>Sales</h2><span class="muted">{{pagination.total}} result{{'' if pagination.total == 1 else 's'}}</span></div>
+	<div class="table-scroll">
+		<table class="sales-table">
+			<thead><tr><th>Sale</th><th>Created</th><th>Buyer</th><th>Items / type</th><th>Category</th><th>Due</th><th>Status</th><th>Payment</th><th>Total</th><th>Actions</th></tr></thead>
+			<tbody>
+				{% for s in sales %}
+				{% set product_type = namespace(name='') %}
+				{% for item in s.items %}{% if not product_type.name and item.product.category %}{% set product_type.name = item.product.category.name %}{% endif %}{% endfor %}
+				<tr>
+					<td><strong>#{{s.id}}</strong></td>
+					<td>{{s.created_at.strftime('%b %d, %Y')}}</td>
+					<td>{{s.customer.name if s.customer else '—'}}</td>
+					<td class="sales-item-summary">
+						{% if s.items %}<strong>{{s.items[0].product.name}}</strong>{% if s.items|length > 1 %}<small class="muted">+{{s.items|length - 1}} more item{{'s' if s.items|length > 2 else ''}}</small>{% endif %}{% else %}—{% endif %}
+						<details class="sales-line-details">
+							<summary>Item details</summary>
+							<div class="sales-line-panel">
+								{% for item in s.items %}
+								<div class="sales-line-detail">
+									<strong>{{item.product.name}}</strong>
+									<span>Quantity: {{item.quantity}}</span>
+									{% if item.product.category %}<span>Type: {{item.product.category.name}}</span>{% endif %}
+									{% if item.bundle %}<span>Bundle: {{item.bundle.name}} · {{money(item.bundle.price)}}</span>{% endif %}
+									{% if item.product.tags %}<span>Tags: {{item.product.tags|map(attribute='name')|join(', ')}}</span>{% endif %}
+									{% for addon in item.addons %}<span>Add-on: {{addon.product_addon.name}} · {{money(addon.unit_price)}}{% if addon.price_mode == 'flat' %} flat{% else %} per {{addon.product_addon.quantity_unit or 'item'}}{% endif %}</span>{% endfor %}
+									{% for field in item.fields %}<span>{{field.product_field.name}}: {{field.value or '—'}}</span>{% endfor %}
+								</div>
+								{% else %}<span>No line items.</span>{% endfor %}
+							</div>
+						</details>
+						<small class="muted">{{product_type.name or 'Uncategorized'}}</small>
+					</td>
+					<td>{{s.sale_category or product_type.name or '—'}}</td>
+					<td>{% if s.due_date %}<span class="{{'sales-overdue' if s.due_date < today and s.status not in ('Completed', 'Canceled') else ''}}">{{s.due_date.strftime('%b %d, %Y')}}</span>{% else %}—{% endif %}</td>
+					<td>
+						<form class="sales-status-form" method="post" action="{{url_for('sale_status_update', id=s.id)}}">
+							<input type="hidden" name="next" value="{{request.full_path}}">
+							<input type="hidden" name="version_id" value="{{s.version_id}}">
+							<select name="status" aria-label="Status for sale {{s.id}}">{% for option in sale_statuses %}<option value="{{option}}" {{'selected' if s.status == option else ''}}>{{option}}</option>{% endfor %}</select>
+							<button class="button secondary">Save</button>
+						</form>
+					</td>
+					<td>
+						<form method="post" action="{{url_for('sale_paid_toggle', id=s.id)}}">
+							<input type="hidden" name="next" value="{{request.full_path}}">
+							<input type="hidden" name="version_id" value="{{s.version_id}}">
+							<button class="payment-toggle {{'is-paid' if s.paid else 'is-unpaid'}}">{{'Paid' if s.paid else 'Mark paid'}}</button>
+						</form>
+					</td>
+					<td><strong>{{money(s.total_amount)}}</strong></td>
+					<td><div class="sales-row-actions"><a class="button secondary" href="{{url_for('sale_edit', id=s.id)}}">Edit</a><form method="post" action="{{url_for('sale_delete', id=s.id)}}" onsubmit="return confirm('Remove sale #{{s.id}}?')"><input type="hidden" name="version_id" value="{{s.version_id}}"><button class="button secondary danger">Delete</button></form></div></td>
+				</tr>
+				{% else %}<tr><td colspan="10" class="sales-empty">No sales match these filters.</td></tr>{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Sales pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

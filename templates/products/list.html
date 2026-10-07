@@ -1,1 +1,34 @@
-{% extends 'base.html' %}{% block title %}Products{% endblock %}{% block heading %}Products{% endblock %}{% block content %}<div class="toolbar"><a class="button" href="{{url_for('product_new')}}">+ New Product</a></div><section class="panel"><table><tr><th>Product</th><th>Category</th><th>Base Price</th><th>Trackable</th><th>Add-ons</th><th>Pricing Options</th><th>Actions</th></tr>{% for p in products %}<tr><td><b>{{p.name}}</b><br><span class="muted">{{p.description or ''}}</span></td><td>{{p.category.name if p.category else '—'}}</td><td>{{money(p.base_price)}}</td><td>{{p.fields|length}}</td><td>{{p.addons|length}}</td><td>{{p.bundles|length}}</td><td><a class="button secondary" href="{{url_for('product_edit',id=p.id)}}">Edit</a><form class="inline" method="post" action="{{url_for('product_delete',id=p.id)}}" onsubmit="return confirm('Delete this product?')"><button class="button secondary danger">Delete</button></form></td></tr>{% else %}<tr><td colspan="7">No products yet.</td></tr>{% endfor %}</table></section>{% endblock %}
+{% extends 'base.html' %}{% block title %}Products{% endblock %}{% block heading %}Products{% endblock %}{% block
+content %}<div class="toolbar"><a class="button" href="{{url_for('product_new')}}">+ New Product</a></div>
+<section class="panel">
+    <div class="table-scroll">
+    <table>
+        <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Base Price</th>
+            <th>Trackable</th>
+            <th>Add-ons</th>
+            <th>Pricing Options</th>
+            <th>Visibility</th>
+            <th>Actions</th>
+        </tr>{% for p in products %}<tr>
+            <td><b>{{p.name}}</b><br><span class="muted">{{p.description or ''}}</span>{% if p.tags %}<div class="product-tag-list">{% for tag in p.tags %}<span>{{tag.name}}</span>{% endfor %}</div>{% endif %}</td>
+            <td>{{p.category.name if p.category else '—'}}</td>
+            <td>{{money(p.base_price)}}</td>
+            <td>{{p.fields|length}}</td>
+            <td>{{p.addons|length}}</td>
+            <td>{{p.bundles|length}}</td>
+            <td><span class="visibility-badge {{'is-public' if p.is_public else 'is-private'}}">{{'Public' if p.is_public else 'Private'}}</span></td>
+            <td><a class="button secondary" href="{{url_for('product_edit',id=p.id)}}">Edit</a>
+                <form class="inline" method="post" action="{{url_for('product_delete',id=p.id)}}"
+                    onsubmit="return confirm('Delete this product?')"><input type="hidden" name="version_id" value="{{p.version_id}}"><button
+                        class="button secondary danger">Delete</button></form>
+            </td>
+        </tr>{% else %}<tr>
+            <td colspan="8">No products yet.</td>
+        </tr>{% endfor %}
+    </table>
+    </div>
+    {% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Product pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
+</section>{% endblock %}

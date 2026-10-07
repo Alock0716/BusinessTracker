@@ -1,0 +1,31 @@
+{% extends 'public_base.html' %}
+{% block title %}My Purchases · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-seller-heading">
+    <p class="public-kicker">Buyer account</p>
+    <h1>Welcome, {{buyer.display_name}}</h1>
+    <p>{{buyer.email}}</p>
+</section>
+<section class="public-section">
+    <div class="public-section-heading"><div><p class="public-kicker">Receipts and status</p><h2>Purchase history</h2></div></div>
+    {% if purchases %}
+    <div class="table-scroll public-standings">
+        <table>
+            <thead><tr><th>Seller</th><th>Date</th><th>Items</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead>
+            <tbody>
+                {% for sale,seller in purchases %}
+                <tr>
+                    <td><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a></td>
+                    <td>{{sale.created_at.strftime('%b %d, %Y')}}</td>
+                    <td>{% for item in sale.items %}<div>{{item.product.name}} × {{item.quantity}}</div>{% else %}—{% endfor %}</td>
+                    <td>{{sale.status}}</td>
+                    <td>{{'Paid' if sale.paid else 'Pending'}}</td>
+                    <td>{{money(sale.total_amount)}}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="public-empty">Purchases made while signed in will appear here. Guest purchases are not linked to this account.</p>{% endif %}
+</section>
+{% endblock %}

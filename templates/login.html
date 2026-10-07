@@ -1,27 +1,18 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sign In · Business Tracker</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
-</head>
-<body class="login-page">
-  <main class="login-shell">
-    <section class="login-card">
-      <div class="login-brand">Business Tracker</div>
-      <h1>Sign in</h1>
-      <p class="muted">Enter your credentials to access your business tracker.</p>
-      {% with messages=get_flashed_messages(with_categories=true) %}
-        {% for category,message in messages %}<div class="flash {{category}}">{{message}}</div>{% endfor %}
-      {% endwith %}
-      <form method="post" class="form login-form">
-        <input type="hidden" name="next" value="{{ next }}">
-        <label>Username<input name="username" autocomplete="username" autofocus required></label>
+{% extends 'public_base.html' %}
+{% block title %}Seller Sign In · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth">
+    <p class="public-kicker">Seller workspace</p>
+    <h1>Sign in</h1>
+    <p class="muted">Sign in to your seller workspace or buyer account.</p>
+    <form method="post" class="form">
+        <input type="hidden" name="next" value="{{next}}">
+        <label>Username or email<input type="text" name="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username or email" autofocus required></label>
         <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
-        <button class="button login-button" type="submit">Sign In</button>
-      </form>
-    </section>
-  </main>
-</body>
-</html>
+        <button class="button" type="submit">Sign In</button>
+    </form>
+    <p class="public-auth-note"><a href="{{url_for('forgot_password')}}">Forgot your password?</a></p>
+    <p class="public-auth-note">Existing sellers with a placeholder email can temporarily use their username, then add a real email in Account Settings.</p>
+    <p class="public-auth-note">New buyer? <a href="{{url_for('store_customer_register')}}">Create a buyer account</a>. New seller? <a href="{{url_for('register')}}">Apply here</a>.</p>
+</section>
+{% endblock %}

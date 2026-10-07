@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}{{board.name}}{% endblock %}
+{% block heading %}{{board.name}}{% endblock %}
+{% block content %}
+<div class="leaderboard-actions">
+    <a class="button secondary" href="{{url_for('leaderboards')}}">All Leaderboards</a>
+    <form method="post" action="{{url_for('leaderboard_delete', id=board.id)}}" onsubmit="return confirm('Delete this leaderboard and all its scores?')">
+    <input type="hidden" name="version_id" value="{{board.version_id}}">
+        <button class="button secondary danger">Delete Leaderboard</button>
+    </form>
+</div>
+<div class="leaderboard-editor-grid">
+    <section class="panel">
+        <h2>Leaderboard settings</h2>
+        <form method="post" action="{{url_for('leaderboard_settings', id=board.id)}}" class="form">
+            <input type="hidden" name="version_id" value="{{board.version_id}}">
+            <div class="leaderboard-fields">
+                <label>Name<input name="name" maxlength="160" value="{{board.name}}" required></label>
+                <label>Score label<input name="score_label" maxlength="80" value="{{board.score_label}}" required></label>
+                <label class="leaderboard-wide">Description<textarea name="description" rows="2">{{board.description or ''}}</textarea></label>
+                <label class="leaderboard-rank-field">Rank by
+                    <select name="sort_order">
+                        <option value="desc" {{'selected' if board.sort_order == 'desc' else ''}}>Highest score first</option>
+                        <option value="asc" {{'selected' if board.sort_order == 'asc' else ''}}>Lowest score first</option>
+                    </select>
+                </label>
+                <label class="leaderboard-wide leaderboard-visibility">
+                    <input type="checkbox" name="is_public" value="1" {% if board.is_public %}checked{% endif %}>
+                    <span><strong>Public leaderboard</strong><small>Show on public storefront</small></span>
+                </label>
+            </div>
+            <div class="actions"><button class="button">Save Settings</button></div>
+        </form>
+    </section>
+    <section class="panel">
+        <h2>Add a customer</h2>
+        {% if customers %}
+        <form method="post" action="{{url_for('leaderboard_entry_add', id=board.id)}}" class="form">
+            <label>Customer
+                <select name="customer_id" required>
+                    <option value="">Choose a customer</option>
+                    {% for customer in customers %}<option value="{{customer.id}}">{{customer.name}}</option>{% endfor %}
+                </select>
+            </label>
+            <label>Show publicly as
+                <select name="use_username">
+                    <option value="0">Customer name</option>
+                    <option value="1">Customer username</option>
+                </select>
+                <span class="muted">Set usernames in the customer profile.</span>
+            </label>
+            <label>{{board.score_label}}<input type="number" name="score" step="0.01" required></label>
+            <div class="actions"><button class="button">Add to Leaderboard</button></div>
+        </form>
+        {% else %}
+        <p class="muted">All existing customers are already on this leaderboard, or no customers have been created yet.</p>
+        {% endif %}
+    </section>
+</div>
+<section class="panel">
+    <h2>Standings</h2>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Rank</th><th>Customer</th><th>{{board.score_label}}</th><th>Update score</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr>
+                    <td>{{loop.index}}</td>
+                    <td><strong>{{entry.customer.name}}</strong>{% if entry.customer.username or entry.customer.email %}<div class="muted">{{entry.customer.username or entry.customer.email}}</div>{% endif %}</td>
+                    <td>{{'%.2f'|format(entry.score)}}</td>
+                    <td>
+                        <form class="leaderboard-score-form" method="post" action="{{url_for('leaderboard_entry_score', id=board.id, entry_id=entry.id)}}">
+                            <input type="hidden" name="version_id" value="{{entry.version_id}}">
+                            <label class="visually-hidden" for="score-{{entry.id}}">{{board.score_label}} for {{entry.customer.name}}</label>
+                            <input id="score-{{entry.id}}" type="number" name="score" step="0.01" value="{{entry.score}}" required>
+                            <label class="visually-hidden" for="display-{{entry.id}}">Public display name for {{entry.customer.name}}</label>
+                            <select id="display-{{entry.id}}" name="use_username">
+                                <option value="0" {{'selected' if not entry.use_username else ''}}>Name</option>
+                                <option value="1" {{'selected' if entry.use_username else ''}} {{'disabled' if not entry.customer.username else ''}}>Username</option>
+                            </select>
+                            <button class="button secondary">Save</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" action="{{url_for('leaderboard_entry_remove', id=board.id, entry_id=entry.id)}}" onsubmit="return confirm('Remove {{entry.customer.name}} from this leaderboard?')">
+                            <input type="hidden" name="version_id" value="{{entry.version_id}}">
+                            <button class="button secondary danger">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5">No customers on this leaderboard yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Leaderboards{% endblock %}
+{% block heading %}Leaderboards{% endblock %}
+{% block content %}
+<div class="leaderboard-page">
+    <section class="panel leaderboard-create">
+        <h2>Create a leaderboard</h2>
+        <form method="post" action="{{url_for('leaderboard_new')}}" class="form">
+            <div class="leaderboard-fields">
+                <label>Name<input name="name" maxlength="160" required></label>
+                <label>Score label<input name="score_label" maxlength="80" value="Score" required></label>
+                <label class="leaderboard-wide">Description<textarea name="description" rows="2"></textarea></label>
+                <label class="leaderboard-rank-field">Rank by
+                    <select name="sort_order">
+                        <option value="desc">Highest score first</option>
+                        <option value="asc">Lowest score first</option>
+                    </select>
+                </label>
+                <label class="leaderboard-wide leaderboard-visibility">
+                    <input type="checkbox" name="is_public" value="1" checked>
+                    <span><strong>Public leaderboard</strong><small>Show on public storefront</small></span>
+                </label>
+            </div>
+            <div class="actions"><button class="button">Create Leaderboard</button></div>
+        </form>
+    </section>
+    <section class="panel leaderboard-list-panel">
+        <h2>Your leaderboards</h2>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Leaderboard</th><th>Participants</th><th>Score</th><th>Ranking</th><th>Visibility</th></tr></thead>
+                <tbody>
+                    {% for board, entry_count in leaderboards %}
+                    <tr>
+                        <td><a href="{{url_for('leaderboard_detail', id=board.id)}}"><strong>{{board.name}}</strong></a>{% if board.description %}<div class="muted">{{board.description}}</div>{% endif %}</td>
+                        <td>{{entry_count}}</td>
+                        <td>{{board.score_label}}</td>
+                        <td>{{'Highest first' if board.sort_order == 'desc' else 'Lowest first'}}</td>
+                        <td><span class="visibility-badge {{'is-public' if board.is_public else 'is-private'}}">{{'Public' if board.is_public else 'Private'}}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5">No leaderboards yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Leaderboard pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
+    </section>
+</div>
+{% endblock %}

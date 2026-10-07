@@ -1,0 +1,16 @@
+{% extends 'public_base.html' %}
+{% block title %}Create Seller Account · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth">
+    <p class="public-kicker">For creators and sellers</p>
+    <h1>Create your seller account</h1>
+    <p class="muted">Public menus and leaderboards remain open to everyone. Seller accounts are reviewed by an admin before activation; approved accounts receive removable example records to help you get started.</p>
+    <form method="post" class="form">
+        <label>Username<input name="username" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" autocomplete="username" required></label>
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <label>Password<input type="password" name="password" minlength="10" autocomplete="new-password" required></label>
+        <label>Confirm password<input type="password" name="password_confirm" minlength="10" autocomplete="new-password" required></label>
+        <button class="button" type="submit">Create Seller Account</button>
+    </form>
+</section>
+{% endblock %}

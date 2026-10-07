@@ -1,0 +1,23 @@
+{% extends 'public_base.html' %}
+{% block title %}Checkout · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth checkout-result">
+    {% if paid %}
+    <p class="public-kicker">Payment confirmed</p>
+    <h1>Thank you for your purchase</h1>
+    <p class="muted">Your payment was received. The seller can now manage your order.</p>
+    {% if current_store_customer %}<a class="button" href="{{url_for('store_customer_account')}}">View purchase history</a>{% endif %}
+    {% elif canceled %}
+    <p class="public-kicker">Checkout canceled</p>
+    <h1>No payment was made</h1>
+    <p class="muted">You can return to the seller's menu and try again whenever you are ready.</p>
+    {% if seller %}<a class="button secondary" href="{{url_for('seller_store', username=seller.username)}}">Back to menu</a>{% endif %}
+    {% else %}
+    <p class="public-kicker">Payment processing</p>
+    <h1>Your payment is being confirmed</h1>
+    <p class="muted">This page will update after Stripe confirms the payment. You can safely close it and check your purchase history later.</p>
+    {% if current_store_customer %}<a class="button secondary" href="{{url_for('store_customer_account')}}">View purchase history</a>{% endif %}
+    {% endif %}
+    <p class="public-auth-note"><a href="{{url_for('storefront')}}">Continue browsing</a></p>
+</section>
+{% endblock %}

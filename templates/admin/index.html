@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Admin{% endblock %}
+{% block heading %}Admin{% endblock %}
+{% block content %}
+<section class="panel admin-database-panel">
+    <div class="admin-panel-heading">
+        <div><h2>Database</h2><p class="muted">Engine: {{database_engine}}</p></div>
+        {% if backup_available %}<a class="button secondary" href="{{url_for('admin_database_backup')}}">Download SQLite backup</a>{% endif %}
+    </div>
+    <div class="admin-database-counts">
+        {% for label,count in database_counts %}<div><small>{{label}}</small><strong>{{count}}</strong></div>{% endfor %}
+    </div>
+</section>
+<section class="panel admin-users-panel">
+    <div class="admin-panel-heading"><div><h2>Creator accounts</h2><p class="muted">Approve sellers, manage roles and subscriptions, view payment setup, or remove an account and its records.</p><p class="muted">Waivers stop future renewals at period end; they do not refund paid invoices or void outstanding invoices.</p></div></div>
+    <form method="get" action="{{url_for('admin_dashboard')}}" class="admin-user-filters">
+        <label>Search users<input type="search" name="q" value="{{query}}" placeholder="Display name or username"></label>
+        <label>Account status<select name="status"><option value="">All accounts</option><option value="pending" {{'selected' if status == 'pending' else ''}}>Pending approval</option><option value="active" {{'selected' if status == 'active' else ''}}>Active</option><option value="admins" {{'selected' if status == 'admins' else ''}}>Admins</option><option value="billing" {{'selected' if status == 'billing' else ''}}>Needs subscription</option></select></label>
+        <div><button class="button">Filter</button> <a class="button secondary" href="{{url_for('admin_dashboard')}}">Clear</a></div>
+    </form>
+    <div class="table-scroll">
+        <table class="admin-user-table">
+            <thead><tr><th>Creator</th><th>Joined</th><th>Access</th><th>Subscription</th><th>Stripe Connect</th><th>Customers</th><th>Products</th><th>Sales</th><th>Boards</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for row in accounts %}
+                {% set account = row.account %}
+                <tr>
+                    <td><strong>{{account.display_name or account.username}}</strong><small class="muted">@{{account.username}}</small><small class="muted">{{account.email}}</small></td>
+                    <td>{{account.created_at.strftime('%b %d, %Y')}}</td>
+                    <td><span class="admin-account-badge {{'is-active' if account.is_approved else 'is-pending'}}">{{'Admin' if account.is_admin else ('Active' if account.is_approved else 'Pending')}}</span></td>
+                    <td><span class="admin-account-badge {{'is-active' if account.subscription_exempt or account.is_admin or account.stripe_subscription_status in ('active', 'trialing') else 'is-pending'}}">{{'Admin exempt' if account.is_admin else ('Waived' if account.subscription_exempt else account.stripe_subscription_status|capitalize)}}</span></td>
+                    <td>{% if account.stripe_account_id %}<span class="admin-account-badge {{'is-active' if account.stripe_charges_enabled and account.stripe_details_submitted else 'is-pending'}}">{{'Ready' if account.stripe_charges_enabled and account.stripe_details_submitted else 'Setup pending'}}</span><small class="muted">{{'Purchases enabled' if account.accepting_orders else 'Purchases off'}}</small>{% else %}<span class="muted">Not connected</span>{% endif %}</td>
+                    <td>{{row.customers}}</td><td>{{row.products}}</td><td>{{row.sales}}</td><td>{{row.leaderboards}}</td>
+                    <td class="admin-actions-cell">
+                        <form method="post" action="{{url_for('admin_user_approval', id=account.id)}}">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <input type="hidden" name="approved" value="{{'0' if account.is_approved else '1'}}">
+                            <button class="button secondary">{{'Deactivate' if account.is_approved else 'Approve'}}</button>
+                        </form>
+                        <form method="post" action="{{url_for('admin_user_role', id=account.id)}}">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <input type="hidden" name="is_admin" value="{{'0' if account.is_admin else '1'}}">
+                            <button class="button secondary" {% if account.id == current_creator.id and account.is_admin %}disabled{% endif %}>{{'Remove admin' if account.is_admin else 'Make admin'}}</button>
+                        </form>
+                        {% if not account.is_admin %}
+                        <form method="post" action="{{url_for('admin_user_subscription_exemption', id=account.id)}}">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <input type="hidden" name="subscription_exempt" value="{{'0' if account.subscription_exempt else '1'}}">
+                            <button class="button secondary">{{'Restore fee' if account.subscription_exempt else 'Waive fee'}}</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="{{url_for('admin_user_password', id=account.id)}}" class="admin-password-form">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <label class="visually-hidden" for="admin-password-{{account.id}}">New password for {{account.username}}</label>
+                            <input id="admin-password-{{account.id}}" type="password" name="password" minlength="10" placeholder="New password" required>
+                            <button class="button secondary">Reset password</button>
+                        </form>
+                        <form method="post" action="{{url_for('admin_user_delete', id=account.id)}}" onsubmit="return confirm('Permanently delete @{{account.username}} and all of their business records? Download a database backup first if needed.')">
+                            <input type="hidden" name="next" value="{{request.full_path}}">
+                            <input type="hidden" name="version_id" value="{{account.version_id}}">
+                            <button class="button secondary danger" {% if account.id == current_creator.id %}disabled{% endif %}>Delete account &amp; data</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}<tr><td colspan="10">No creators match these filters.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Creator pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

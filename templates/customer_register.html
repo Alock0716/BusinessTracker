@@ -1,0 +1,17 @@
+{% extends 'public_base.html' %}
+{% block title %}Create Buyer Account · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-auth">
+    <p class="public-kicker">Optional buyer account</p>
+    <h1>Save your purchase history</h1>
+    <p class="muted">A buyer account is only for your details and receipts. You can also check out without creating one.</p>
+    <form method="post" class="form">
+        <label>Name<input name="display_name" maxlength="160" autocomplete="name" required></label>
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <label>Password<input type="password" name="password" minlength="10" autocomplete="new-password" required></label>
+        <label>Confirm password<input type="password" name="password_confirm" minlength="10" autocomplete="new-password" required></label>
+        <button class="button" type="submit">Create Buyer Account</button>
+    </form>
+    <p class="public-auth-note"><a href="{{url_for('store_customer_login')}}">Already registered? Sign in</a>.</p>
+</section>
+{% endblock %}

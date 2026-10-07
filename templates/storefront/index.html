@@ -1,0 +1,50 @@
+{% extends 'public_base.html' %}
+{% block title %}Product Menus · Business Tracker{% endblock %}
+{% block content %}
+<section class="public-intro">
+    <p class="public-kicker">Independent creators and sellers</p>
+    <h1>Browse the menus</h1>
+    <p>Explore products, services, and makers across the community.</p>
+    <form class="public-search-form" method="get" action="{{url_for('storefront')}}" role="search">
+        <label class="visually-hidden" for="site-search">Search sellers, products, or leaderboards</label>
+        <input id="site-search" type="search" name="q" value="{{query}}" placeholder="Search sellers, products, or leaderboards" autocomplete="off">
+        <button class="button" type="submit">Search</button>
+    </form>
+</section>
+<section class="public-section">
+    <div class="public-section-heading"><div><p class="public-kicker">{{'Search results' if query else 'Discover'}}</p><h2>{{'Product matches' if query else 'Product menus'}}</h2></div></div>
+    {% if product_results %}
+    <div class="public-product-grid">
+        {% for product,seller,category in product_results %}
+        <article class="public-product-card">
+            <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a><span>@{{seller.username}}</span>{% if category %}<span>{{category.name}}</span>{% endif %}</div>
+            <h3><a href="{{url_for('seller_store', username=seller.username)}}">{{product.name}}</a></h3>
+            {% if product.description %}<p>{{product.description}}</p>{% endif %}
+            <div class="public-price">{{money(product.base_price)}}</div>
+            {% set active_bundles = product.bundles|selectattr('active')|list %}
+            {% if active_bundles %}<ul class="public-option-list">{% for option in active_bundles %}<li>{{option.name}} <span>{{money(option.price)}}</span></li>{% endfor %}</ul>{% endif %}
+            {% set active_addons = product.addons|selectattr('active')|list %}
+            {% if active_addons %}<div class="public-addons"><strong>Add-ons</strong>{% for addon in active_addons %}<span>{{addon.name}} · {{money(addon.price)}}{% if addon.price_mode == 'flat' %} one-time{% else %} per {{addon.quantity_unit or 'item'}}{% endif %}</span>{% endfor %}</div>{% endif %}
+            {% include 'storefront/_purchase_form.html' %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}<p class="public-empty">{{'No products matched. Try a seller username or leaderboard name.' if query else 'No menus have been published yet.'}}</p>{% endif %}
+</section>
+{% if query and board_results %}
+<section class="public-section public-search-matches">
+    <div class="public-section-heading"><div><p class="public-kicker">Also matching</p><h2>Leaderboards</h2></div><a class="public-text-link" href="{{url_for('public_leaderboards', q=query)}}">View all results</a></div>
+    <div class="public-list">
+        {% for board,seller in board_results[:5] %}
+        <a class="public-list-item" href="{{url_for('public_leaderboard', username=seller.username, id=board.id)}}"><span><strong>{{board.name}}</strong><small>{{seller.display_name or seller.username}} · @{{seller.username}}</small></span><span class="public-list-arrow" aria-hidden="true">›</span></a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% if query and sellers %}
+<section class="public-section public-search-matches">
+    <div class="public-section-heading"><div><p class="public-kicker">Seller search</p><h2>Profiles</h2></div></div>
+    <div class="public-seller-list">{% for seller in sellers %}<a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}} <small>@{{seller.username}}</small><span aria-hidden="true">→</span></a>{% endfor %}</div>
+</section>
+{% endif %}
+{% endblock %}

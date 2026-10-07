@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Notifications{% endblock %}
+{% block heading %}Notifications{% endblock %}
+{% block content %}
+<section class="panel notifications-panel">
+    <div class="admin-panel-heading">
+        <div><h2>Recent activity</h2><p class="muted">New sales and account activity for your seller workspace.</p></div>
+        {% if notifications|selectattr('read_at', 'none')|list %}
+        <form method="post" action="{{url_for('notifications_read_all')}}"><button class="button secondary">Mark all read</button></form>
+        {% endif %}
+    </div>
+    {% if notifications %}
+    <ul class="notification-list">
+        {% for notification in notifications %}
+        <li class="notification-item {{'is-unread' if not notification.read_at else ''}}">
+            <div><strong>{{notification.title}}</strong><p>{{notification.message}}</p><small>{{notification.created_at.strftime('%b %d, %Y at %I:%M %p')}}</small></div>
+            <div class="actions">
+                {% if notification.sale_id %}<a class="button secondary" href="{{url_for('sale_edit', id=notification.sale_id)}}">View sale</a>{% endif %}
+                {% if not notification.read_at %}<form method="post" action="{{url_for('notification_read', id=notification.id)}}"><button class="button secondary">Mark read</button></form>{% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No notifications yet. New sales will appear here.</p>{% endif %}
+</section>
+{% endblock %}
