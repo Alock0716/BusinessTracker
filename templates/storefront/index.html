@@ -17,7 +17,7 @@
     <div class="public-product-grid">
         {% for product,seller,category in product_results %}
         <article class="public-product-card">
-            <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a><span>@{{seller.username}}</span>{% if category %}<span>{{category.name}}</span>{% endif %}</div>
+            <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a>{% if not seller.display_name %}<span>@{{seller.username}}</span>{% endif %}{% if category %}<span>{{category.name}}</span>{% endif %}</div>
             <h3><a href="{{url_for('seller_store', username=seller.username)}}">{{product.name}}</a></h3>
             {% if product.description %}<p>{{product.description}}</p>{% endif %}
             <div class="public-price">{{money(product.base_price)}}</div>

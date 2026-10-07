@@ -119,14 +119,13 @@ def login():
     if session.get('store_customer_id'):
         return redirect(url_for('store_customer_account'))
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
+        identity = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-        creator = CreatorAccount.query.filter(func.lower(CreatorAccount.email) == email).first()
-        if creator is None and '@' not in email:
-            legacy_creator = CreatorAccount.query.filter_by(username=email).first()
-            if legacy_creator and legacy_creator.email.endswith('@example.invalid'):
-                creator = legacy_creator
-        buyer = StoreCustomer.query.filter(func.lower(StoreCustomer.email) == email).first()
+        creator = CreatorAccount.query.filter(or_(
+            func.lower(CreatorAccount.email) == identity,
+            func.lower(CreatorAccount.username) == identity,
+        )).first()
+        buyer = StoreCustomer.query.filter(func.lower(StoreCustomer.email) == identity).first()
         if creator and check_password_hash(creator.password_hash, password):
             if not creator.is_approved:
                 flash('Your seller account is awaiting admin approval.', 'error')
