@@ -1789,7 +1789,7 @@ def _sale_form(sale):
             db.session.add(sale)
             db.session.flush()
         else:
-            SaleItem.query.filter_by(sale_id=sale.id).delete(synchronize_session=False)
+            sale.items.clear()
         selected_customer = None
         customer_choice = request.form.get('customer_id', '').strip()
         if customer_choice == '__new__':
