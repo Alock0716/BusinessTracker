@@ -63,15 +63,18 @@ def scope_creator_queries(execute_state):
         for model in TENANT_MODELS
     ))
 
-def _expire_service_subscriptions(owner_id):
+def _notify_expired_service_subscriptions(owner_id):
     today = date.today()
     expiring = ServiceSubscription.query.filter(
         ServiceSubscription.owner_id == owner_id,
         ServiceSubscription.status == 'active',
         ServiceSubscription.current_period_end < today,
+        or_(
+            ServiceSubscription.last_notified_period_end.is_(None),
+            ServiceSubscription.last_notified_period_end != ServiceSubscription.current_period_end,
+        ),
     ).all()
     for subscription in expiring:
-        subscription.status = 'expired'
         subscription.last_notified_period_end = subscription.current_period_end
         db.session.add(SellerNotification(
             owner_id=owner_id,
@@ -93,8 +96,8 @@ def expire_service_subscriptions_command():
         ServiceSubscription.status == 'active',
         ServiceSubscription.current_period_end < date.today(),
     ).distinct().all()
-    expired_count = sum(_expire_service_subscriptions(owner_id) for (owner_id,) in owner_ids)
-    print(f'Expired {expired_count} service subscription(s).')
+    notified_count = sum(_notify_expired_service_subscriptions(owner_id) for (owner_id,) in owner_ids)
+    print(f'Created {notified_count} service subscription expiration notification(s).')
 
 @app.before_request
 def require_creator():
@@ -108,7 +111,7 @@ def require_creator():
                 g.creator = creator
                 g.is_admin = creator.is_admin
                 if not creator.is_admin:
-                    _expire_service_subscriptions(creator.id)
+                    _notify_expired_service_subscriptions(creator.id)
             else:
                 session.clear()
         return
@@ -121,7 +124,7 @@ def require_creator():
     g.creator_id = creator.id
     g.is_admin = creator.is_admin
     if not creator.is_admin:
-        _expire_service_subscriptions(creator.id)
+        _notify_expired_service_subscriptions(creator.id)
     if request.endpoint and request.endpoint.startswith('admin_') and not creator.is_admin:
         abort(403)
     if not creator.is_admin and not creator.subscription_exempt and creator.stripe_subscription_status not in ACTIVE_SUBSCRIPTION_STATUSES:
@@ -193,7 +196,10 @@ def login():
             func.lower(CreatorAccount.email) == identity,
             func.lower(CreatorAccount.username) == identity,
         )).first()
-        buyer = StoreCustomer.query.filter(func.lower(StoreCustomer.email) == identity).first()
+        buyer = StoreCustomer.query.filter(or_(
+            func.lower(StoreCustomer.email) == identity,
+            func.lower(StoreCustomer.username) == identity,
+        )).first()
         if creator and check_password_hash(creator.password_hash, password):
             if not creator.is_approved:
                 flash('Your seller account is awaiting admin approval.', 'error')
@@ -276,22 +282,29 @@ def store_customer_register():
     next_url = request.form.get('next', '') if request.method == 'POST' else request.args.get('next', '')
     if request.method == 'POST':
         display_name = request.form.get('display_name', '').strip()
+        username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
+        contact_number = request.form.get('contact_number', '').strip()
         password = request.form.get('password', '')
         confirmation = request.form.get('password_confirm', '')
-        if not display_name:
-            flash('Enter your name.', 'error')
+        if not re.fullmatch(r'[a-z0-9][a-z0-9_.-]{2,39}', username):
+            flash('Choose a username with 3 to 40 letters, numbers, dots, dashes, or underscores.', 'error')
         elif not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
             flash('Enter a valid email address.', 'error')
+        elif not 7 <= len(re.sub(r'\D', '', contact_number)) <= 15:
+            flash('Enter a valid contact number with 7 to 15 digits.', 'error')
         elif StoreCustomer.query.filter(func.lower(StoreCustomer.email) == email).first() or CreatorAccount.query.filter(func.lower(CreatorAccount.email) == email).first():
             flash('An account already uses that email.', 'error')
+        elif StoreCustomer.query.filter(func.lower(StoreCustomer.username) == username).first() or CreatorAccount.query.filter(func.lower(CreatorAccount.username) == username).first():
+            flash('That username is already in use.', 'error')
         elif len(password) < 10:
             flash('Use a password with at least 10 characters.', 'error')
         elif password != confirmation:
             flash('The passwords do not match.', 'error')
         else:
             buyer = StoreCustomer(
-                display_name=display_name, email=email,
+                display_name=display_name[:160] or username,
+                username=username, email=email, contact_number=contact_number[:40],
                 password_hash=generate_password_hash(password),
             )
             db.session.add(buyer)
@@ -408,89 +421,176 @@ def notification_read(id):
 
 SERVICE_SUBSCRIPTION_STATUSES = ('active', 'paused', 'canceled', 'expired')
 
-def _subscription_products(owner_id):
+def _subscription_products(owner_id, include_inactive_id=None):
     return Product.query.join(Category, Product.category_id == Category.id).filter(
-        Product.owner_id == owner_id, Product.active.is_(True),
+        Product.owner_id == owner_id,
+        or_(Product.active.is_(True), Product.id == include_inactive_id) if include_inactive_id else Product.active.is_(True),
         Category.owner_id == owner_id, func.lower(Category.name) == 'subscriptions',
     ).order_by(Product.name).all()
 
 @app.route('/subscriptions')
 def service_subscriptions():
+    today = date.today()
+    status_filter = request.args.get('status', '')
+    period_filter = request.args.get('period', '')
+    query_text = request.args.get('q', '').strip()
+    sort = request.args.get('sort', 'status_asc')
     query = ServiceSubscription.query.options(
         joinedload(ServiceSubscription.customer), joinedload(ServiceSubscription.product),
-    ).filter(ServiceSubscription.owner_id == g.creator.id).order_by(
-        case((ServiceSubscription.status == 'active', 0), else_=1),
-        ServiceSubscription.current_period_end, ServiceSubscription.id,
+    ).filter(ServiceSubscription.owner_id == g.creator.id)
+    overdue_condition = (
+        (ServiceSubscription.status == 'active')
+        & (ServiceSubscription.current_period_end < today)
     )
+    early_inactive_condition = (
+        ServiceSubscription.status.in_(('paused', 'canceled', 'expired'))
+        & (ServiceSubscription.current_period_end >= today)
+    )
+    if status_filter == 'overdue':
+        query = query.filter(overdue_condition)
+    elif status_filter in SERVICE_SUBSCRIPTION_STATUSES:
+        query = query.filter(ServiceSubscription.status == status_filter)
+    if period_filter == 'past':
+        query = query.filter(ServiceSubscription.current_period_end < today)
+    elif period_filter == 'future':
+        query = query.filter(ServiceSubscription.current_period_end >= today)
+    elif period_filter == 'mismatch':
+        query = query.filter(or_(overdue_condition, early_inactive_condition))
+    if query_text:
+        pattern = f'%{query_text}%'
+        query = query.filter(or_(
+            ServiceSubscription.customer.has(or_(
+                Customer.name.ilike(pattern), Customer.email.ilike(pattern),
+            )),
+            ServiceSubscription.product.has(Product.name.ilike(pattern)),
+            ServiceSubscription.notes.ilike(pattern),
+        ))
+    status_order = case(
+        (overdue_condition, 0),
+        (ServiceSubscription.status == 'active', 1),
+        (ServiceSubscription.status == 'paused', 2),
+        (ServiceSubscription.status == 'canceled', 3),
+        (ServiceSubscription.status == 'expired', 4),
+        else_=5,
+    )
+    sort_options = {
+        'status_asc': (status_order.asc(), ServiceSubscription.current_period_end.asc()),
+        'status_desc': (status_order.desc(), ServiceSubscription.current_period_end.desc()),
+        'end_asc': (ServiceSubscription.current_period_end.asc(), ServiceSubscription.id.desc()),
+        'end_desc': (ServiceSubscription.current_period_end.desc(), ServiceSubscription.id.desc()),
+        'start_desc': (ServiceSubscription.started_at.desc(), ServiceSubscription.id.desc()),
+    }
+    if sort not in sort_options:
+        sort = 'status_asc'
+    query = query.order_by(*sort_options[sort])
     pagination = query.paginate(
-        page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
+        page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False,
     )
+    status_counts = dict(db.session.query(
+        ServiceSubscription.status, func.count(ServiceSubscription.id)
+    ).filter(ServiceSubscription.owner_id == g.creator.id).group_by(ServiceSubscription.status).all())
+    overdue_count = ServiceSubscription.query.filter(
+        ServiceSubscription.owner_id == g.creator.id, overdue_condition,
+    ).count()
+    early_inactive_count = ServiceSubscription.query.filter(
+        ServiceSubscription.owner_id == g.creator.id, early_inactive_condition,
+    ).count()
+    page_filters = {key: value for key, value in request.args.items() if key in {'q', 'status', 'period', 'sort'}}
     return render_template(
         'subscriptions/index.html', subscriptions=pagination.items,
-        customers=Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all(),
-        products=_subscription_products(g.creator.id),
-        statuses=SERVICE_SUBSCRIPTION_STATUSES, pagination=pagination,
-        previous_url=url_for('service_subscriptions', page=pagination.prev_num) if pagination.has_prev else None,
-        next_url=url_for('service_subscriptions', page=pagination.next_num) if pagination.has_next else None,
-        today=date.today(),
+        statuses=SERVICE_SUBSCRIPTION_STATUSES, status_filter=status_filter,
+        period_filter=period_filter, query_text=query_text, sort=sort,
+        pagination=pagination, status_counts=status_counts,
+        overdue_count=overdue_count, early_inactive_count=early_inactive_count,
+        previous_url=url_for('service_subscriptions', **{**page_filters, 'page': pagination.prev_num}) if pagination.has_prev else None,
+        next_url=url_for('service_subscriptions', **{**page_filters, 'page': pagination.next_num}) if pagination.has_next else None,
+        today=today,
     )
 
-@app.route('/subscriptions/new', methods=['POST'])
+@app.route('/subscriptions/new', methods=['GET', 'POST'])
 def service_subscription_new():
-    customer_id = request.form.get('customer_id', type=int)
-    product_id = request.form.get('product_id', type=int)
-    end_value = request.form.get('current_period_end', '').strip()
-    start_value = request.form.get('started_at', '').strip()
-    customer = Customer.query.filter_by(id=customer_id, owner_id=g.creator.id).first() if customer_id else None
-    product = next((item for item in _subscription_products(g.creator.id) if item.id == product_id), None)
-    try:
-        started_at = date.fromisoformat(start_value) if start_value else date.today()
-        current_period_end = date.fromisoformat(end_value)
-    except ValueError:
-        flash('Choose a valid subscription start and end date.', 'error')
+    customers = Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
+    products = _subscription_products(g.creator.id)
+    if request.method == 'POST':
+        customer_id = request.form.get('customer_id', type=int)
+        product_id = request.form.get('product_id', type=int)
+        customer = Customer.query.filter_by(id=customer_id, owner_id=g.creator.id).first() if customer_id else None
+        product = next((item for item in products if item.id == product_id), None)
+        status = request.form.get('status', 'active')
+        try:
+            started_at = date.fromisoformat(request.form.get('started_at', '').strip())
+            current_period_end = date.fromisoformat(request.form.get('current_period_end', '').strip())
+        except ValueError:
+            flash('Choose valid subscription start and end dates.', 'error')
+            return redirect(url_for('service_subscription_new'))
+        if customer is None or product is None:
+            flash('Choose a customer and a product in your Subscriptions category.', 'error')
+            return redirect(url_for('service_subscription_new'))
+        if status not in SERVICE_SUBSCRIPTION_STATUSES:
+            flash('Choose a valid subscription status.', 'error')
+            return redirect(url_for('service_subscription_new'))
+        if current_period_end < started_at:
+            flash('The period end must be on or after the start date.', 'error')
+            return redirect(url_for('service_subscription_new'))
+        subscription = ServiceSubscription(
+            owner_id=g.creator.id, customer_id=customer.id, product_id=product.id,
+            started_at=started_at, current_period_end=current_period_end,
+            status=status, notes=request.form.get('notes', '').strip()[:2000] or None,
+        )
+        db.session.add(subscription)
+        db.session.commit()
+        flash('Customer subscription added.', 'success')
         return redirect(url_for('service_subscriptions'))
-    if customer is None or product is None:
-        flash('Choose a customer and a product in your Subscriptions category.', 'error')
-        return redirect(url_for('service_subscriptions'))
-    if current_period_end < started_at:
-        flash('The subscription end date must be on or after its start date.', 'error')
-        return redirect(url_for('service_subscriptions'))
-    subscription = ServiceSubscription(
-        owner_id=g.creator.id, customer_id=customer.id, product_id=product.id,
-        started_at=started_at, current_period_end=current_period_end,
-        status='active', notes=request.form.get('notes', '').strip() or None,
+    return render_template(
+        'subscriptions/form.html', subscription=None, customers=customers,
+        products=products, statuses=SERVICE_SUBSCRIPTION_STATUSES, today=date.today(),
     )
-    db.session.add(subscription)
-    db.session.commit()
-    flash('Customer subscription added.', 'success')
-    return redirect(url_for('service_subscriptions'))
 
-@app.route('/subscriptions/<int:id>/update', methods=['POST'])
+@app.route('/subscriptions/<int:id>/update', methods=['GET', 'POST'])
 def service_subscription_update(id):
-    subscription = ServiceSubscription.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
-    if not _form_version_matches(subscription):
+    subscription = ServiceSubscription.query.options(
+        joinedload(ServiceSubscription.customer), joinedload(ServiceSubscription.product),
+    ).filter_by(id=id, owner_id=g.creator.id).first_or_404()
+    customers = Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
+    products = _subscription_products(g.creator.id, include_inactive_id=subscription.product_id)
+    if request.method == 'POST':
+        if not _form_version_matches(subscription):
+            return redirect(url_for('service_subscription_update', id=subscription.id))
+        customer_id = request.form.get('customer_id', type=int)
+        product_id = request.form.get('product_id', type=int)
+        customer = Customer.query.filter_by(id=customer_id, owner_id=g.creator.id).first() if customer_id else None
+        product = next((item for item in products if item.id == product_id), None)
+        status = request.form.get('status', '')
+        try:
+            started_at = date.fromisoformat(request.form.get('started_at', '').strip())
+            current_period_end = date.fromisoformat(request.form.get('current_period_end', '').strip())
+        except ValueError:
+            flash('Choose valid subscription start and end dates.', 'error')
+            return redirect(url_for('service_subscription_update', id=subscription.id))
+        if customer is None or product is None:
+            flash('Choose a customer and a product in your Subscriptions category.', 'error')
+            return redirect(url_for('service_subscription_update', id=subscription.id))
+        if status not in SERVICE_SUBSCRIPTION_STATUSES:
+            flash('Choose a valid subscription status.', 'error')
+            return redirect(url_for('service_subscription_update', id=subscription.id))
+        if current_period_end < started_at:
+            flash('The period end must be on or after the start date.', 'error')
+            return redirect(url_for('service_subscription_update', id=subscription.id))
+        if current_period_end != subscription.current_period_end:
+            subscription.last_notified_period_end = None
+        subscription.customer_id = customer.id
+        subscription.product_id = product.id
+        subscription.started_at = started_at
+        subscription.current_period_end = current_period_end
+        subscription.status = status
+        subscription.notes = request.form.get('notes', '').strip()[:2000] or None
+        db.session.commit()
+        flash('Customer subscription updated.', 'success')
         return redirect(url_for('service_subscriptions'))
-    status = request.form.get('status', '')
-    end_value = request.form.get('current_period_end', '').strip()
-    if status not in SERVICE_SUBSCRIPTION_STATUSES:
-        flash('Choose a valid subscription status.', 'error')
-        return redirect(url_for('service_subscriptions'))
-    try:
-        current_period_end = date.fromisoformat(end_value)
-    except ValueError:
-        flash('Choose a valid subscription end date.', 'error')
-        return redirect(url_for('service_subscriptions'))
-    if status == 'active' and current_period_end < date.today():
-        flash('Set a future end date before marking this subscription active.', 'error')
-        return redirect(url_for('service_subscriptions'))
-    if current_period_end != subscription.current_period_end or status == 'active':
-        subscription.last_notified_period_end = None
-    subscription.current_period_end = current_period_end
-    subscription.status = status
-    subscription.notes = request.form.get('notes', '').strip() or None
-    db.session.commit()
-    flash('Customer subscription updated.', 'success')
-    return redirect(url_for('service_subscriptions'))
+    return render_template(
+        'subscriptions/form.html', subscription=subscription, customers=customers,
+        products=products, statuses=SERVICE_SUBSCRIPTION_STATUSES, today=date.today(),
+    )
 
 TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale', 'service_subscription')
 TENANT_NAME_TABLES = {
@@ -619,6 +719,31 @@ def _migration_datetime_type(dialect_name):
 
 with app.app_context():
     db.create_all()
+    customer_columns = {column['name'] for column in inspect(db.engine).get_columns('customer')}
+    if 'contact_number' not in customer_columns:
+        db.session.execute(text('ALTER TABLE customer ADD COLUMN contact_number VARCHAR(40)'))
+    store_customer_columns = {
+        column['name'] for column in inspect(db.engine).get_columns('store_customer')
+    }
+    if 'username' not in store_customer_columns:
+        db.session.execute(text('ALTER TABLE store_customer ADD COLUMN username VARCHAR(40)'))
+    if 'contact_number' not in store_customer_columns:
+        db.session.execute(text('ALTER TABLE store_customer ADD COLUMN contact_number VARCHAR(40)'))
+    db.session.commit()
+    if db.engine.dialect.name == 'mysql':
+        if not any(
+            index.get('unique') and index.get('column_names') == ['username']
+            for index in inspect(db.engine).get_indexes('store_customer')
+        ):
+            db.session.execute(text(
+                'CREATE UNIQUE INDEX uq_store_customer_username ON store_customer(username)'
+            ))
+    else:
+        db.session.execute(text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_store_customer_username '
+            'ON store_customer(username)'
+        ))
+    db.session.commit()
     if db.engine.dialect.name == 'sqlite':
         with db.engine.connect() as connection:
             connection.exec_driver_sql('PRAGMA busy_timeout=30000')
@@ -863,7 +988,7 @@ def money(v):
 def _stripe_cents(value):
     return int((money(value) * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
-def _sales_customer_for_buyer(owner_id, email, name):
+def _sales_customer_for_buyer(owner_id, email, name, username=None, contact_number=None):
     if not email:
         return None
     email = email.strip().lower()
@@ -871,9 +996,16 @@ def _sales_customer_for_buyer(owner_id, email, name):
         Customer.owner_id == owner_id, func.lower(Customer.email) == email
     ).first()
     if customer is None:
-        customer = Customer(owner_id=owner_id, name=(name or email)[:160], email=email)
+        customer = Customer(
+            owner_id=owner_id, name=(name or username or email)[:160], email=email,
+            username=username, contact_number=contact_number,
+        )
         db.session.add(customer)
         db.session.flush()
+    else:
+        customer.name = (name or username or email)[:160]
+        customer.username = username or customer.username
+        customer.contact_number = contact_number or customer.contact_number
     return customer
 
 def _send_email(recipient, subject, body):
@@ -1019,10 +1151,16 @@ def _complete_stripe_checkout(checkout):
         sale.delivery_address = '\n'.join(line for line in address_lines if line)
     email = details.get('email') or checkout.get('customer_email')
     name = details.get('name')
+    username = None
+    contact_number = details.get('phone')
     if sale.store_customer:
         email = sale.store_customer.email
         name = sale.store_customer.display_name
-    customer = _sales_customer_for_buyer(sale.owner_id, email, name)
+        username = sale.store_customer.username
+        contact_number = sale.store_customer.contact_number or contact_number
+    customer = _sales_customer_for_buyer(
+        sale.owner_id, email, name, username, contact_number
+    )
     if customer:
         sale.customer = customer
     sale.paid = True
@@ -1577,7 +1715,9 @@ def public_product_checkout(username, product_id):
         flash('This item does not have a payable price yet.', 'error')
         return redirect(url_for('seller_store', username=seller.username))
 
-    crm_customer = _sales_customer_for_buyer(seller.id, buyer.email, buyer.display_name)
+    crm_customer = _sales_customer_for_buyer(
+        seller.id, buyer.email, buyer.display_name, buyer.username, buyer.contact_number
+    )
     sale = Sale(
         owner_id=seller.id,
         store_customer_id=buyer.id,

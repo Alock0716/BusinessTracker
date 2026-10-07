@@ -4,7 +4,7 @@
 {% block content %}
 <section class="panel notifications-panel">
     <div class="admin-panel-heading">
-        <div><h2>Recent activity</h2><p class="muted">New sales and account activity for your seller workspace.</p></div>
+        <div><h2>Recent activity</h2><p class="muted">New sales and service subscription expirations for your seller workspace.</p></div>
         {% if notifications|selectattr('read_at', 'none')|list %}
         <form method="post" action="{{url_for('notifications_read_all')}}"><button class="button secondary">Mark all read</button></form>
         {% endif %}
@@ -22,6 +22,6 @@
         </li>
         {% endfor %}
     </ul>
-    {% else %}<p class="muted">No notifications yet. New sales will appear here.</p>{% endif %}
+    {% else %}<p class="muted">No notifications yet. New sales and subscription expirations will appear here.</p>{% endif %}
 </section>
 {% endblock %}

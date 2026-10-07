@@ -76,6 +76,7 @@
 					<td>
 						{% if s.customer %}<a href="{{url_for('customer_edit', id=s.customer.id)}}">{{s.customer.name}}</a>{% elif s.store_customer %}<strong>{{s.store_customer.display_name}}</strong>{% else %}—{% endif %}
 						{% if s.customer and s.customer.email %}<small class="muted sales-buyer-email">{{s.customer.email}}</small>{% elif s.store_customer %}<small class="muted sales-buyer-email">{{s.store_customer.email}}</small>{% endif %}
+						{% if s.customer and s.customer.contact_number %}<small class="muted sales-buyer-email">{{s.customer.contact_number}}</small>{% elif s.store_customer and s.store_customer.contact_number %}<small class="muted sales-buyer-email">{{s.store_customer.contact_number}}</small>{% endif %}
 						{% if s.delivery_address %}{% set delivery_recipient = s.delivery_name or (s.store_customer.display_name if s.store_customer else 'Recipient') %}<details class="sale-delivery-details"><summary>Delivery details</summary><div><strong>{{delivery_recipient}}</strong>{% if s.delivery_phone %}<br>{{s.delivery_phone}}{% endif %}<br>{{s.delivery_address}}</div></details>{% endif %}
 					</td>
 					<td class="sales-item-summary">

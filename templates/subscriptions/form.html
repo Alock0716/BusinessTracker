@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}{{'Edit' if subscription else 'Add'}} Customer Subscription{% endblock %}
+{% block heading %}{{'Edit' if subscription else 'Add'}} Customer Subscription{% endblock %}
+{% block content %}
+{% if customers and products %}
+<form method="post" class="panel form subscription-record-form">
+    {% if subscription %}<input type="hidden" name="version_id" value="{{subscription.version_id}}">{% endif %}
+    <label>Customer<select name="customer_id" required><option value="">Choose a customer</option>{% for customer in customers %}<option value="{{customer.id}}" {{'selected' if subscription and subscription.customer_id == customer.id else ''}}>{{customer.name}}</option>{% endfor %}</select></label>
+    <label>Subscription service<select name="product_id" required><option value="">Choose a service</option>{% for product in products %}<option value="{{product.id}}" {{'selected' if subscription and subscription.product_id == product.id else ''}}>{{product.name}}{{' (inactive)' if not product.active else ''}}</option>{% endfor %}</select></label>
+    <label>Started<input type="date" name="started_at" value="{{subscription.started_at.isoformat() if subscription else today.isoformat()}}" required></label>
+    <label>Current period ends<input type="date" name="current_period_end" value="{{subscription.current_period_end.isoformat() if subscription else ''}}" required></label>
+    <label>Status<select name="status" required>{% for status in statuses %}<option value="{{status}}" {{'selected' if subscription and subscription.status == status else ''}}>{{status|capitalize}}</option>{% endfor %}</select></label>
+    <label>Notes<textarea name="notes" rows="4" maxlength="2000">{{subscription.notes or '' if subscription else ''}}</textarea></label>
+    <div class="actions"><button class="button">{{'Save changes' if subscription else 'Add subscription'}}</button><a class="button secondary" href="{{url_for('service_subscriptions')}}">Cancel</a></div>
+</form>
+{% else %}
+<section class="panel">
+    <p class="muted">Add at least one customer and one active product in the Subscriptions category first.</p>
+    <div class="actions"><a class="button secondary" href="{{url_for('customer_new')}}">Add customer</a><a class="button secondary" href="{{url_for('product_new')}}">Add subscription service</a><a class="button secondary" href="{{url_for('service_subscriptions')}}">Back to subscriptions</a></div>
+</section>
+{% endif %}
+{% endblock %}

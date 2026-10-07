@@ -2,50 +2,43 @@
 {% block title %}Customer Subscriptions{% endblock %}
 {% block heading %}Customer Subscriptions{% endblock %}
 {% block content %}
-<section class="panel subscription-create-panel">
-    <h2>Track a service subscription</h2>
-    {% if customers and products %}
-    <form method="post" action="{{url_for('service_subscription_new')}}" class="form subscription-create-form">
-        <label>Customer<select name="customer_id" required><option value="">Choose a customer</option>{% for customer in customers %}<option value="{{customer.id}}">{{customer.name}}</option>{% endfor %}</select></label>
-        <label>Subscription service<select name="product_id" required><option value="">Choose a service</option>{% for product in products %}<option value="{{product.id}}">{{product.name}}</option>{% endfor %}</select></label>
-        <label>Started<input type="date" name="started_at" value="{{today.isoformat()}}" required></label>
-        <label>Current period ends<input type="date" name="current_period_end" min="{{today.isoformat()}}" required></label>
-        <label class="subscription-notes-field">Notes<textarea name="notes" rows="2" maxlength="2000"></textarea></label>
-        <div class="actions"><button class="button">Add subscription</button></div>
-    </form>
-    {% else %}
-    <p class="muted">Add at least one customer and one active product in the Subscriptions category to track service memberships.</p>
-    <div class="actions"><a class="button secondary" href="{{url_for('customer_new')}}">Add customer</a><a class="button secondary" href="{{url_for('product_new')}}">Add subscription service</a></div>
-    {% endif %}
+<div class="sales-toolbar"><p class="muted">Track customer service plans, renewal dates, and status.</p><a class="button" href="{{url_for('service_subscription_new')}}">+ Add subscription</a></div>
+<section class="cards sales-summary subscription-summary">
+    <div><small>Active</small><strong>{{status_counts.get('active', 0) - overdue_count}}</strong></div>
+    <div class="summary-overdue"><small>Overdue</small><strong>{{overdue_count}}</strong></div>
+    <div><small>Paused</small><strong>{{status_counts.get('paused', 0)}}</strong></div>
+    <div><small>Ended</small><strong>{{status_counts.get('canceled', 0) + status_counts.get('expired', 0)}}</strong></div>
 </section>
-
+<section class="panel subscription-list-panel">
+    <details class="sales-filter-disclosure" {% if query_text or status_filter or period_filter or sort != 'status_asc' %}open{% endif %}>
+        <summary><span>Search, filters, and sorting</span><span class="sales-filter-count">{{pagination.total}} matching records</span></summary>
+        <form method="get" action="{{url_for('service_subscriptions')}}" class="sales-filters">
+            <label class="sales-search">Search<input type="search" name="q" value="{{query_text}}" placeholder="Customer, service, or notes"></label>
+            <label>Status<select name="status"><option value="">All statuses</option><option value="overdue" {{'selected' if status_filter == 'overdue' else ''}}>Overdue (active, past end)</option>{% for item in statuses %}<option value="{{item}}" {{'selected' if status_filter == item else ''}}>{{item|capitalize}}</option>{% endfor %}</select></label>
+            <label>Period<select name="period"><option value="">Any period</option><option value="past" {{'selected' if period_filter == 'past' else ''}}>End date has passed</option><option value="future" {{'selected' if period_filter == 'future' else ''}}>End date has not passed</option><option value="mismatch" {{'selected' if period_filter == 'mismatch' else ''}}>Status and dates don't align</option></select></label>
+            <label>Sort by<select name="sort"><option value="status_asc" {{'selected' if sort == 'status_asc' else ''}}>Status: active to ended</option><option value="status_desc" {{'selected' if sort == 'status_desc' else ''}}>Status: ended to active</option><option value="end_asc" {{'selected' if sort == 'end_asc' else ''}}>Period end: soonest</option><option value="end_desc" {{'selected' if sort == 'end_desc' else ''}}>Period end: latest</option><option value="start_desc" {{'selected' if sort == 'start_desc' else ''}}>Recently started</option></select></label>
+            <div class="sales-filter-actions"><button class="button">Apply filters</button><a class="button secondary" href="{{url_for('service_subscriptions')}}">Clear</a></div>
+        </form>
+    </details>
+</section>
 <section class="panel subscription-list-panel">
     <div class="sales-results-heading"><h2>Subscriptions</h2><span class="muted">{{pagination.total}} record{{'' if pagination.total == 1 else 's'}}</span></div>
     {% if subscriptions %}
     <div class="table-scroll">
         <table class="service-subscription-table">
-            <thead><tr><th>Customer</th><th>Service</th><th>Started</th><th>Period ends</th><th>Status</th><th>Notes</th><th>Update</th></tr></thead>
+            <thead><tr><th>Customer</th><th>Service</th><th>Started</th><th>Period ends</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead>
             <tbody>
                 {% for subscription in subscriptions %}
-                <tr class="{{'subscription-is-expired' if subscription.status == 'expired' else ''}}">
+                {% set is_overdue = subscription.status == 'active' and subscription.current_period_end < today %}
+                {% set inactive_before_end = subscription.status in ('canceled', 'expired') and subscription.current_period_end >= today %}
+                <tr class="{{'subscription-is-expired' if is_overdue or subscription.status == 'expired' else ''}}">
                     <td><a href="{{url_for('customer_edit', id=subscription.customer_id)}}">{{subscription.customer.name}}</a></td>
                     <td>{{subscription.product.name}}</td>
                     <td>{{subscription.started_at.strftime('%b %d, %Y')}}</td>
                     <td>{{subscription.current_period_end.strftime('%b %d, %Y')}}</td>
-                    <td><span class="subscription-status-badge status-{{subscription.status}}">{{subscription.status|capitalize}}</span></td>
-                    <td colspan="2">
-                        <form method="post" action="{{url_for('service_subscription_update', id=subscription.id)}}" class="subscription-update-form">
-                            <input type="hidden" name="version_id" value="{{subscription.version_id}}">
-                            <select name="status" aria-label="Status for {{subscription.customer.name}}">
-                                {% for status in statuses %}<option value="{{status}}" {{'selected' if subscription.status == status else ''}}>{{status|capitalize}}</option>{% endfor %}
-                            </select>
-                            <label class="visually-hidden" for="subscription-end-{{subscription.id}}">Current period ends for {{subscription.customer.name}}</label>
-                            <input id="subscription-end-{{subscription.id}}" type="date" name="current_period_end" value="{{subscription.current_period_end.isoformat()}}" required>
-                            <label class="visually-hidden" for="subscription-notes-{{subscription.id}}">Notes for {{subscription.customer.name}}</label>
-                            <input id="subscription-notes-{{subscription.id}}" name="notes" value="{{subscription.notes or ''}}" maxlength="2000" placeholder="Notes">
-                            <button class="button secondary">Save</button>
-                        </form>
-                    </td>
+                    <td><span class="subscription-status-badge {{'status-overdue' if is_overdue else 'status-' ~ subscription.status}}">{{'Overdue' if is_overdue else subscription.status|capitalize}}</span>{% if inactive_before_end %}<small class="subscription-date-warning">Inactive before end date</small>{% endif %}</td>
+                    <td class="subscription-notes-cell">{{subscription.notes or '—'}}</td>
+                    <td><a class="button secondary" href="{{url_for('service_subscription_update', id=subscription.id)}}">Edit</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

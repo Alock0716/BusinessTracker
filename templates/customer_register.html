@@ -4,11 +4,13 @@
 <section class="public-auth">
     <p class="public-kicker">Buyer account</p>
     <h1>Set up your purchase account</h1>
-    <p class="muted">A buyer account with your name and email is required to purchase so sellers can contact you and fulfill orders.</p>
+    <p class="muted">Username, email, password, and contact number are required. Display name is optional and will be used publicly when provided.</p>
     <form method="post" class="form">
         <input type="hidden" name="next" value="{{next}}">
-        <label>Name<input name="display_name" maxlength="160" autocomplete="name" required></label>
+        <label>Display name (optional)<input name="display_name" maxlength="160" autocomplete="name"></label>
+        <label>Username<input name="username" maxlength="40" autocomplete="username" autocapitalize="none" required></label>
         <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <label>Contact number<input type="tel" name="contact_number" maxlength="40" autocomplete="tel" required></label>
         <label>Password<input type="password" name="password" minlength="10" autocomplete="new-password" required></label>
         <label>Confirm password<input type="password" name="password_confirm" minlength="10" autocomplete="new-password" required></label>
         <button class="button" type="submit">Create Buyer Account</button>

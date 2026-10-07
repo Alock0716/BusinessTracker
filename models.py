@@ -74,6 +74,7 @@ class Customer(db.Model):
     name = db.Column(db.String(160), nullable=False)
     email = db.Column(db.String(160))
     username = db.Column(db.String(160))
+    contact_number = db.Column(db.String(40))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     version_id = db.Column(db.Integer, nullable=False, default=1)
@@ -87,7 +88,9 @@ class StoreCustomer(db.Model):
     __tablename__ = 'store_customer'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, unique=True)
+    username = db.Column(db.String(40), unique=True)
     display_name = db.Column(db.String(160), nullable=False)
+    contact_number = db.Column(db.String(40))
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     sales = db.relationship('Sale', back_populates='store_customer', lazy=True)

@@ -968,6 +968,46 @@ th {
   color: #687180;
   font-size: 13px;
 }
+.service-subscription-table {
+  min-width: 980px;
+}
+.service-subscription-table th,
+.service-subscription-table td {
+  vertical-align: middle;
+}
+.service-subscription-table .subscription-notes-cell {
+  max-width: 300px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.subscription-status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #edf0f3;
+  color: #414955;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.subscription-status-badge.status-active {
+  background: #e5f4eb;
+  color: #205b3b;
+}
+.subscription-status-badge.status-overdue {
+  background: #fcebed;
+  color: #8f2e40;
+}
+.subscription-status-badge.status-paused {
+  background: #fff3d9;
+  color: #795511;
+}
+.subscription-date-warning {
+  display: block;
+  margin-top: 4px;
+  color: #795511;
+  font-size: 11px;
+}
 .admin-database-panel,
 .admin-users-panel {
   margin-bottom: 12px;

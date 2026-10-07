@@ -3,8 +3,8 @@
 {% block content %}
 <section class="public-seller-heading">
     <p class="public-kicker">Buyer account</p>
-    <h1>Welcome, {{buyer.display_name}}</h1>
-    <p>{{buyer.email}}</p>
+    <h1>Welcome, {{buyer.display_name or buyer.username}}</h1>
+    <p>@{{buyer.username}} · {{buyer.email}} · {{buyer.contact_number}}</p>
 </section>
 <section class="public-section">
     <div class="public-section-heading"><div><p class="public-kicker">Receipts and status</p><h2>Purchase history</h2></div></div>
