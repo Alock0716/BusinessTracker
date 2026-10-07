@@ -1274,13 +1274,16 @@ def public_product_checkout(username, product_id):
     line_items = []
     base_cents = _stripe_cents(unit_price)
     if base_cents > 0:
+        base_product_data = {
+            'name': f'{product.name} — {bundle.name}' if bundle else product.name,
+        }
+        base_description = (bundle.description if bundle else None) or product.description
+        if base_description and base_description.strip():
+            base_product_data['description'] = base_description.strip()
         line_items.append({
             'price_data': {
                 'currency': app.config.get('STRIPE_CURRENCY', 'usd'),
-                'product_data': {
-                    'name': f'{product.name} — {bundle.name}' if bundle else product.name,
-                    'description': bundle.description or product.description if bundle else product.description,
-                },
+                'product_data': base_product_data,
                 'unit_amount': base_cents,
             },
             'quantity': quantity,
