@@ -806,12 +806,26 @@ with app.app_context():
         'banner_notifications': 'BOOLEAN NOT NULL DEFAULT TRUE',
         'email_notifications': 'BOOLEAN NOT NULL DEFAULT FALSE',
         'disable_content_contact': 'BOOLEAN NOT NULL DEFAULT FALSE',
+        'hide_username': 'BOOLEAN NOT NULL DEFAULT FALSE',
     }
     for column_name, definition in creator_preference_migrations.items():
         if column_name not in creator_columns:
             db.session.execute(text(
                 f'ALTER TABLE creator_account ADD COLUMN {column_name} {definition}'
             ))
+    if db.engine.dialect.name == 'mysql':
+        if not any(
+            index.get('unique') and index.get('column_names') == ['display_name']
+            for index in inspect(db.engine).get_indexes('creator_account')
+        ):
+            db.session.execute(text(
+                'CREATE UNIQUE INDEX uq_creator_display_name ON creator_account(display_name)'
+            ))
+    else:
+        db.session.execute(text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_creator_display_name_lower '
+            'ON creator_account (lower(display_name))'
+        ))
     datetime_column_type = _migration_datetime_type(db.engine.dialect.name)
     creator_stripe_migrations = {
         'stripe_account_id': 'VARCHAR(255)',
@@ -2228,6 +2242,9 @@ def seller_availability():
         else 'Your profile is no longer listed as available.',
         'success',
     )
+    return_to = request.form.get('next', '')
+    if return_to == url_for('seller_store', username=g.creator.username):
+        return redirect(return_to)
     return redirect(url_for('dashboard'))
 
 @app.route('/products')

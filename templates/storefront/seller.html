@@ -3,13 +3,29 @@
 {% block content %}
 <section class="public-seller-heading">
     <p class="public-kicker">Seller profile</p>
-    {% set seller_avatar_large = true %}
-    <h1>{% include 'storefront/_seller_identity.html' %}</h1>
-    {% if seller.display_name %}<p class="public-profile-handle">@{{seller.username}}</p>{% endif %}
+    <div class="seller-profile-main">
+        {% if seller.profile_image %}<img class="seller-avatar-large" src="{{url_for('static', filename=seller.profile_image)}}" alt="" fetchpriority="high">{% endif %}
+        <div class="seller-profile-copy">
+            <h1>{{seller.display_name or seller.username}}</h1>
+            <p class="public-profile-handle">@{{seller.username}}</p>
+        </div>
+    </div>
     {% if seller.bio %}<p class="public-seller-bio">{{seller.bio|urlize(target='_blank', rel='nofollow noopener noreferrer')}}</p>{% else %}<p>Products and community standings from this seller.</p>{% endif %}
+    <div class="public-seller-availability {{'is-available' if seller.is_active else 'is-inactive'}}">
+        {% if current_creator and current_creator.id == seller.id %}
+        <form method="post" action="{{url_for('seller_availability')}}">
+            <input type="hidden" name="next" value="{{url_for('seller_store', username=seller.username)}}">
+            <button type="submit" name="is_active" value="{{'0' if seller.is_active else '1'}}" role="switch" aria-checked="{{'true' if seller.is_active else 'false'}}">
+                {{'Available Now' if seller.is_active else 'Inactive Now'}}
+            </button>
+        </form>
+        {% else %}
+        <span role="status">{{'Available Now' if seller.is_active else 'Inactive Now'}}</span>
+        {% endif %}
+    </div>
 </section>
 <section class="public-section">
-    <div class="public-section-heading"><div><p class="public-kicker">Available now</p><h2>Product menu</h2></div></div>
+    <div class="public-section-heading"><div><p class="public-kicker">Public menu</p><h2>Product menu</h2></div></div>
     {% if products %}
     <div class="public-product-grid">
         {% for product in products %}

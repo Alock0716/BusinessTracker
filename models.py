@@ -17,6 +17,7 @@ class CreatorAccount(db.Model):
     display_name = db.Column(db.String(120))
     bio = db.Column(db.Text)
     profile_image = db.Column(db.String(255))
+    hide_username = db.Column(db.Boolean, nullable=False, default=False)
     is_active = db.Column(db.Boolean, nullable=False, default=False)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)

@@ -2519,6 +2519,50 @@ nav a:hover {
   margin-bottom: 20px;
   padding: 19px 0 2px;
 }
+.seller-profile-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.seller-profile-copy {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.seller-profile-copy h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.seller-profile-copy .public-profile-handle,
+.seller-profile-copy .public-seller-bio,
+.seller-profile-copy .seller-profile-description {
+  margin: 0;
+}
+.seller-profile-copy .seller-profile-description { color: #655a72; }
+.public-seller-availability { margin-top: 12px; }
+.public-seller-availability form { margin: 0; }
+.public-seller-availability button,
+.public-seller-availability > span {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.public-seller-availability.is-available button,
+.public-seller-availability.is-available > span {
+  color: #205b3b;
+}
+.public-seller-availability.is-inactive button,
+.public-seller-availability.is-inactive > span {
+  color: #8f2e40;
+}
+.public-seller-availability button { cursor: pointer; }
+.public-seller-availability button:hover { text-decoration: underline; }
+.public-seller-availability button:focus-visible { outline: 3px solid #8093d2; outline-offset: 2px; }
 .public-seller-heading h1 {
   margin-bottom: 7px;
 }
@@ -2949,10 +2993,12 @@ nav a:hover {
   text-underline-offset: 2px;
 }
 .public-footer-tip {
+  display: grid;
+  justify-items: center;
   width: 100%;
   padding-top: 12px;
   border-top: 1px solid #ddd8e4;
-  text-align: left;
+  text-align: center;
 }
 .public-footer-tip h2,
 .buyer-tip-banner-heading strong {
@@ -2960,22 +3006,28 @@ nav a:hover {
   font-size: 15px;
 }
 .public-footer-tip h2 { margin: 0 0 10px; }
-.public-footer-tip .developer-support-content { max-width: none; margin-top: 0; }
+.public-footer-tip .developer-support-content { width: fit-content; max-width: 100%; margin-top: 0; }
 .public-footer-tip .developer-tip-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, 220px) auto;
-  align-items: end;
-  width: 100%;
+  grid-template-columns: 150px auto;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  gap: 10px;
+  margin: 0 auto;
 }
+.public-footer-tip .developer-tip-unavailable { display: block; margin-top: 8px; text-align: center; }
 .public-footer-tip .developer-tip-form label { display: block; }
+.public-footer-tip .tip-currency-input { width: 150px; }
 .public-footer-tip .developer-tip-form input { width: 100%; }
 .public-footer-tip .developer-tip-form button { min-height: 38px; }
 .buyer-tip-banner {
   position: static;
   inset: auto;
   display: grid;
-  grid-template-columns: max-content 150px max-content minmax(0, 1fr) 32px;
-  grid-template-areas: "heading amount submit status dismiss";
+  grid-template-columns: minmax(0, 1fr) max-content 150px max-content minmax(0, 1fr) 32px;
+  grid-template-areas: ". heading amount submit . dismiss" "status status status status status status";
   align-items: center;
   column-gap: 10px;
   width: min(1132px, calc(100% - 48px));
@@ -2994,7 +3046,7 @@ nav a:hover {
 .buyer-tip-banner-heading {
   display: contents;
 }
-.buyer-tip-banner-heading strong { grid-area: heading; color: #183c32; white-space: nowrap; }
+.buyer-tip-banner-heading strong { grid-area: heading; justify-self: center; color: #183c32; white-space: nowrap; }
 .buyer-tip-banner .developer-support-content {
   display: contents;
 }
@@ -3008,7 +3060,7 @@ nav a:hover {
   border-color: #899b94;
 }
 .buyer-tip-banner .developer-tip-form button { grid-area: submit; min-height: 38px; color: #fff; white-space: nowrap; }
-.buyer-tip-banner .developer-tip-form small { grid-area: status; justify-self: end; white-space: nowrap; }
+.buyer-tip-banner .developer-tip-unavailable { grid-area: status; justify-self: center; text-align: center; }
 .buyer-tip-banner .developer-tip-form button:disabled {
   opacity: 1;
   background: #586b64;
@@ -3076,7 +3128,7 @@ nav a:hover {
 .tip-currency-input input:focus { outline-offset: -2px; }
 .buyer-tip-banner .tip-currency-input { border-color: #899b94; }
 .buyer-tip-banner .tip-currency-input > span { color: #183c32; }
-.public-footer-tip .tip-currency-input { width: 100%; }
+.public-footer-tip .tip-currency-input { width: 150px; }
 .public-footer-tip .tip-currency-input input { width: 100%; }
 .developer-tip-form button:disabled {
   opacity: 0.55;
@@ -3116,10 +3168,9 @@ nav a:hover {
     text-align: center;
   }
   .public-footer-tip .developer-tip-form {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .public-footer-tip .developer-tip-form label {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    width: 100%;
   }
   .buyer-tip-banner {
     width: calc(100% - 24px);
@@ -3127,10 +3178,12 @@ nav a:hover {
     grid-template-areas:
       "heading dismiss"
       "amount amount"
-      "submit status";
+      "submit submit"
+      "status status";
   }
-  .buyer-tip-banner .developer-tip-form button { justify-self: start; }
-  .buyer-tip-banner .developer-tip-form small { justify-self: end; white-space: normal; }
+  .buyer-tip-banner .developer-tip-form label,
+  .buyer-tip-banner .developer-tip-form button { justify-self: center; }
+  .buyer-tip-banner .developer-tip-unavailable { justify-self: center; }
 }
 .public-purchase-details {
   margin-top: 12px;
