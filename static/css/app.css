@@ -2593,6 +2593,17 @@ nav a:hover {
   font-size: 13px;
   font-weight: 700;
 }
+.public-seller-bio {
+  max-width: 68ch;
+  white-space: pre-line;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.public-seller-bio a {
+  color: #315f51;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .public-board-seller small,
 .public-seller-list a small {
   display: block;

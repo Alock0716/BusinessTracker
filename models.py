@@ -15,6 +15,7 @@ class CreatorAccount(db.Model):
     username = db.Column(db.String(64), nullable=False, unique=True)
     email = db.Column(db.String(255), nullable=False, unique=True)
     display_name = db.Column(db.String(120))
+    bio = db.Column(db.Text)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     is_approved = db.Column(db.Boolean, nullable=False, default=False)

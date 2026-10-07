@@ -500,6 +500,8 @@ with app.app_context():
         db.session.execute(text(
             'ALTER TABLE creator_account ADD COLUMN display_name VARCHAR(120)'
         ))
+    if 'bio' not in creator_columns:
+        db.session.execute(text('ALTER TABLE creator_account ADD COLUMN bio TEXT'))
     creator_email_definition = 'VARCHAR(255)'
     if 'email' not in creator_columns:
         db.session.execute(text(
@@ -2324,6 +2326,7 @@ def account_settings():
         username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         display_name = request.form.get('display_name', '').strip()
+        bio = request.form.get('bio', '').strip()
         new_password = request.form.get('new_password', '')
         password_confirm = request.form.get('password_confirm', '')
         current_password = request.form.get('current_password', '')
@@ -2341,6 +2344,8 @@ def account_settings():
             flash('That username is already in use.', 'error')
         elif len(display_name) > 120:
             flash('Display names must be 120 characters or fewer.', 'error')
+        elif len(bio) > 2000:
+            flash('Bios must be 2,000 characters or fewer.', 'error')
         elif (new_password or password_confirm) and not check_password_hash(account.password_hash, current_password):
             flash('Enter your current password to change it.', 'error')
         elif new_password and len(new_password) < 10:
@@ -2351,6 +2356,7 @@ def account_settings():
             account.username = username
             account.email = email
             account.display_name = display_name or None
+            account.bio = bio or None
             account.banner_notifications = request.form.get('banner_notifications') == '1'
             account.email_notifications = request.form.get('email_notifications') == '1'
             if new_password:

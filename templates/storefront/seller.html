@@ -5,7 +5,7 @@
     <p class="public-kicker">Seller profile</p>
     <h1>{{seller.display_name or seller.username}}</h1>
     {% if seller.display_name %}<p class="public-profile-handle">@{{seller.username}}</p>{% endif %}
-    <p>Products and community standings from this seller.</p>
+    {% if seller.bio %}<p class="public-seller-bio">{{seller.bio|urlize(target='_blank', rel='nofollow noopener noreferrer')}}</p>{% else %}<p>Products and community standings from this seller.</p>{% endif %}
 </section>
 <section class="public-section">
     <div class="public-section-heading"><div><p class="public-kicker">Available now</p><h2>Product menu</h2></div></div>
