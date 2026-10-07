@@ -87,11 +87,11 @@ def require_creator():
         if request.endpoint not in BILLING_ACCESS_ENDPOINTS:
             return redirect(url_for('seller_billing'))
 
-def _write_conflict_response():
+def _write_conflict_response(message):
     db.session.rollback()
     if request.endpoint == 'stripe_webhook':
         return '', 409
-    flash('This record changed in another session. Review the latest version and try again.', 'error')
+    flash(message, 'error')
     referrer = request.referrer
     if referrer and urlsplit(referrer).netloc == request.host:
         return redirect(referrer)
@@ -99,11 +99,30 @@ def _write_conflict_response():
 
 @app.errorhandler(StaleDataError)
 def stale_write_error(error):
-    return _write_conflict_response()
+    db.session.rollback()
+    sale_endpoints = {'sale_edit', 'sale_delete', 'sale_status_update', 'sale_paid_toggle'}
+    view_args = request.view_args or {}
+    if request.endpoint in sale_endpoints and getattr(g, 'creator_id', None):
+        sale_id = view_args.get('id')
+        latest = Sale.query.filter_by(id=sale_id, owner_id=g.creator_id).first()
+        submitted_version = request.form.get('version_id', type=int)
+        if latest is not None and submitted_version is not None:
+            message = (
+                f'Sale #{latest.id} changed during save (form version {submitted_version}; '
+                f'latest version {latest.version_id}). Your changes were not saved. '
+                'Reload the sale and reapply your edits.'
+            )
+        else:
+            message = 'This sale changed during save. Reload it and reapply your edits.'
+        logging.warning('Stale sale write on %s for sale id %s', request.endpoint, sale_id)
+    else:
+        message = 'This record changed during save. Reload it and reapply your edits.'
+    return _write_conflict_response(message)
 
 @app.errorhandler(IntegrityError)
 def integrity_write_error(error):
-    return _write_conflict_response()
+    message = 'The save conflicts with existing data or a database constraint. Reload the page and try again.'
+    return _write_conflict_response(message)
 
 def _form_version_matches(record):
     submitted_version = request.form.get('version_id', type=int)
