@@ -2242,10 +2242,9 @@ def seller_availability():
         else 'Your profile is no longer listed as available.',
         'success',
     )
-    return_to = request.form.get('next', '')
-    if return_to == url_for('seller_store', username=g.creator.username):
-        return redirect(return_to)
-    return redirect(url_for('dashboard'))
+    return redirect(_safe_local_return(
+        request.form.get('next', ''), url_for('dashboard')
+    ))
 
 @app.route('/products')
 def products():
