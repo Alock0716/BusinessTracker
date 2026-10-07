@@ -66,14 +66,13 @@
 	<div class="sales-results-heading"><h2>Sales</h2><span class="muted">{{pagination.total}} result{{'' if pagination.total == 1 else 's'}}</span></div>
 	<div class="table-scroll">
 		<table class="sales-table">
-			<thead><tr><th>Sale</th><th>Created</th><th>Buyer</th><th>Items / type</th><th>Category</th><th>Due</th><th>Status</th><th>Payment</th><th>Total</th><th>Actions</th></tr></thead>
+			<thead><tr><th>Sale</th><th>Buyer</th><th>Items / type</th><th>Category</th><th>Due</th><th>Status</th><th>Payment</th><th>Total</th><th>Actions</th></tr></thead>
 			<tbody>
 				{% for s in sales %}
 				{% set product_type = namespace(name='') %}
 				{% for item in s.items %}{% if not product_type.name and item.product.category %}{% set product_type.name = item.product.category.name %}{% endif %}{% endfor %}
 				<tr>
 					<td><strong>#{{s.id}}</strong></td>
-					<td>{{s.created_at.strftime('%b %d, %Y')}}</td>
 					<td>{{s.customer.name if s.customer else '—'}}</td>
 					<td class="sales-item-summary">
 						{% if s.items %}<strong>{{s.items[0].product.name}}</strong>{% if s.items|length > 1 %}<small class="muted">+{{s.items|length - 1}} more item{{'s' if s.items|length > 2 else ''}}</small>{% endif %}{% else %}—{% endif %}
@@ -115,7 +114,7 @@
 					<td><strong>{{money(s.total_amount)}}</strong></td>
 					<td><div class="sales-row-actions"><a class="button secondary" href="{{url_for('sale_edit', id=s.id)}}">Edit</a><form method="post" action="{{url_for('sale_delete', id=s.id)}}" onsubmit="return confirm('Remove sale #{{s.id}}?')"><input type="hidden" name="version_id" value="{{s.version_id}}"><button class="button secondary danger">Delete</button></form></div></td>
 				</tr>
-				{% else %}<tr><td colspan="10" class="sales-empty">No sales match these filters.</td></tr>{% endfor %}
+				{% else %}<tr><td colspan="9" class="sales-empty">No sales match these filters.</td></tr>{% endfor %}
 			</tbody>
 		</table>
 	</div>

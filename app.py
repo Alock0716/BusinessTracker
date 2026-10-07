@@ -317,7 +317,7 @@ def notification_read(id):
         db.session.commit()
     return redirect(request.form.get('next') or url_for('notifications'))
 
-TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'sale')
+TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale')
 TENANT_NAME_TABLES = {
     'category': (
         'id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES creator_account(id), '
@@ -343,6 +343,12 @@ TENANT_NAME_TABLES = {
         'active BOOLEAN, category_id INTEGER REFERENCES category(id), created_at DATETIME, '
         'CONSTRAINT uq_product_owner_name UNIQUE (owner_id, name)',
         'id, owner_id, name, description, base_price, active, category_id, created_at',
+    ),
+    'product_tag': (
+        'id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES creator_account(id), '
+        'name VARCHAR(40) NOT NULL, '
+        'CONSTRAINT uq_product_tag_owner_name UNIQUE (owner_id, name)',
+        'id, owner_id, name',
     ),
 }
 
@@ -536,7 +542,8 @@ with app.app_context():
         )
         db.session.add(legacy_creator)
         db.session.commit()
-    _migrate_tenant_schema(legacy_creator.id)
+    migration_owner = CreatorAccount.query.filter_by(username='kaykohl').first() or legacy_creator
+    _migrate_tenant_schema(migration_owner.id)
     for table_name in ('product', 'leaderboard'):
         columns = {column['name'] for column in inspect(db.engine).get_columns(table_name)}
         if 'is_public' not in columns:
@@ -1448,7 +1455,7 @@ def products():
         joinedload(Product.category), selectinload(Product.tags),
         selectinload(Product.fields), selectinload(Product.addons),
         selectinload(Product.bundles),
-    ).order_by(Product.name)
+    ).filter(Product.owner_id == g.creator.id).order_by(Product.name)
     pagination = products_query.paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
@@ -1462,14 +1469,14 @@ def products():
 def product_new():
     if request.method == 'POST':
         category_id = request.form.get('category_id') or None
-        category = Category.query.filter_by(id=category_id).first() if category_id else None
+        category = Category.query.filter_by(id=category_id, owner_id=g.creator.id).first() if category_id else None
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_new'))
         p=Product(owner_id=g.creator.id, name=request.form['name'], description=request.form.get('description'), base_price=money(request.form.get('base_price')), category_id=category.id if category else None, is_public=request.form.get('is_public', '1') == '1')
         db.session.add(p); db.session.flush(); _save_product_children(p)
         db.session.commit(); flash('Product created.','success'); return redirect(url_for('products'))
-    return render_template('products/form.html', product=None, categories=Category.query.order_by(Category.name).all())
+    return render_template('products/form.html', product=None, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
 
 @app.route('/products/<int:id>/edit', methods=['GET','POST'])
 def product_edit(id):
@@ -1481,14 +1488,14 @@ def product_edit(id):
         return redirect(url_for('product_edit', id=p.id))
     if request.method=='POST':
         category_id = request.form.get('category_id') or None
-        category = Category.query.filter_by(id=category_id).first() if category_id else None
+        category = Category.query.filter_by(id=category_id, owner_id=g.creator.id).first() if category_id else None
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_edit', id=p.id))
         p.name=request.form['name']; p.description=request.form.get('description'); p.base_price=money(request.form.get('base_price')); p.category_id=category.id if category else None; p.is_public=request.form.get('is_public') == '1'
         ProductField.query.filter_by(product_id=p.id).delete(); ProductAddon.query.filter_by(product_id=p.id).delete(); ProductBundle.query.filter_by(product_id=p.id).delete()
         _save_product_children(p); db.session.commit(); flash('Product updated.','success'); return redirect(url_for('products'))
-    return render_template('products/form.html', product=p, categories=Category.query.order_by(Category.name).all())
+    return render_template('products/form.html', product=p, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
 
 @app.route('/products/<int:id>/delete', methods=['POST'])
 def product_delete(id):
@@ -1628,8 +1635,8 @@ def sales():
 
     product_type_name = db.session.query(Category.name).select_from(SaleItem).join(
         Product, Product.id == SaleItem.product_id
-    ).outerjoin(Category, Category.id == Product.category_id).filter(
-        SaleItem.sale_id == Sale.id
+    ).outerjoin(Category, (Category.id == Product.category_id) & (Category.owner_id == g.creator.id)).filter(
+        SaleItem.sale_id == Sale.id, Product.owner_id == g.creator.id
     ).order_by(Product.name).limit(1).scalar_subquery()
     sale_type = func.coalesce(Sale.sale_category, product_type_name)
     sort_options = {
@@ -1685,8 +1692,11 @@ def sales():
     categories = [row[0] for row in db.session.query(Sale.sale_category).filter(
         Sale.owner_id == g.creator.id, Sale.sale_category.isnot(None)
     ).distinct().order_by(Sale.sale_category).all()]
-    product_types = Category.query.join(Product, Product.category_id == Category.id).distinct().order_by(Category.name).all()
+    product_types = Category.query.join(Product, Product.category_id == Category.id).filter(
+        Category.owner_id == g.creator.id, Product.owner_id == g.creator.id
+    ).distinct().order_by(Category.name).all()
     product_tags = ProductTag.query.filter(
+        ProductTag.owner_id == g.creator.id,
         ProductTag.products.any(Product.owner_id == g.creator.id)
     ).order_by(ProductTag.name).all()
     addons = ProductAddon.query.options(joinedload(ProductAddon.product)).join(Product).filter(
@@ -1723,11 +1733,11 @@ def _sale_form(sale):
     is_new_sale = sale is None
     if sale is not None and request.method == 'POST' and not _form_version_matches(sale):
         return redirect(url_for('sale_edit', id=sale.id))
-    products = Product.query.filter_by(active=True).options(
+    products = Product.query.filter_by(owner_id=g.creator.id, active=True).options(
         selectinload(Product.tags), selectinload(Product.fields),
         selectinload(Product.addons), selectinload(Product.bundles),
     ).order_by(Product.name).all()
-    customers=Customer.query.order_by(Customer.name).all()
+    customers=Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
     sale_categories = [row[0] for row in db.session.query(Sale.sale_category).filter(
         Sale.owner_id == g.creator.id, Sale.sale_category.isnot(None)
     ).distinct().order_by(Sale.sale_category).all()]
@@ -1791,8 +1801,8 @@ def _sale_form(sale):
                 sale.customer_id = None
         platform_id = request.form.get('platform_id') or None
         payment_method_id = request.form.get('payment_method_id') or None
-        platform = Platform.query.filter_by(id=platform_id, active=True).first() if platform_id else None
-        payment = PaymentMethod.query.filter_by(id=payment_method_id, active=True).first() if payment_method_id else None
+        platform = Platform.query.filter_by(id=platform_id, owner_id=g.creator.id, active=True).first() if platform_id else None
+        payment = PaymentMethod.query.filter_by(id=payment_method_id, owner_id=g.creator.id, active=True).first() if payment_method_id else None
         if platform_id and not platform or payment_method_id and not payment:
             db.session.rollback()
             flash('Choose an active platform and payment method from your account.', 'error')
@@ -1804,7 +1814,7 @@ def _sale_form(sale):
         for i,pid in enumerate(pids):
             if not pid: continue
             try:
-                product = Product.query.filter_by(id=int(pid), active=True).first()
+                product = Product.query.filter_by(id=int(pid), owner_id=g.creator.id, active=True).first()
             except ValueError:
                 product = None
             if not product:
@@ -1862,7 +1872,7 @@ def _sale_form(sale):
         for item in sale.items:
             selected_items.append({'product_id': item.product_id, 'bundle_id': item.bundle_id, 'quantity': str(item.quantity or 1), 'unit_price': str(item.unit_price or 0), 'labor_hours': str(item.labor_hours or 0), 'fields': {str(x.product_field_id): x.value for x in item.fields}, 'addons': {str(x.product_addon_id): str(x.quantity or 1) for x in item.addons}})
     return render_template('sales/form.html', sale=sale, products=products, customers=customers,
-        platforms=Platform.query.filter_by(active=True).all(), payments=PaymentMethod.query.filter_by(active=True).all(),
+        platforms=Platform.query.filter_by(owner_id=g.creator.id, active=True).all(), payments=PaymentMethod.query.filter_by(owner_id=g.creator.id, active=True).all(),
         product_data=_product_json(products), selected_items=selected_items, sale_categories=sale_categories,
         sale_statuses=SALE_STATUSES,
         now=(sale.sale_date if sale else datetime.utcnow()).strftime('%Y-%m-%dT%H:%M'))
@@ -1925,6 +1935,7 @@ def customers():
         Sale, Sale.id == SaleItem.sale_id
     ).join(Customer, Customer.id == Sale.customer_id).filter(
         Customer.owner_id == g.creator.id, Sale.owner_id == g.creator.id,
+        Product.owner_id == g.creator.id,
         Sale.customer_id.in_(customer_ids),
     ).group_by(Sale.customer_id, Product.id, Product.name).order_by(
         Sale.customer_id, func.sum(SaleItem.quantity).desc(), Product.id,
@@ -2023,13 +2034,13 @@ def leaderboard_new():
 
 @app.route('/leaderboards/<int:id>')
 def leaderboard_detail(id):
-    board = Leaderboard.query.get_or_404(id)
+    board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
     score_order = LeaderboardEntry.score.desc() if board.sort_order == 'desc' else LeaderboardEntry.score.asc()
     entries = db.session.query(LeaderboardEntry).join(Customer).filter(
-        LeaderboardEntry.leaderboard_id == board.id
+        LeaderboardEntry.leaderboard_id == board.id, Customer.owner_id == g.creator.id
     ).order_by(score_order, func.lower(Customer.name)).all()
     existing_customer_ids = {entry.customer_id for entry in entries}
-    customers = Customer.query.order_by(Customer.name).all()
+    customers = Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
     customers = [customer for customer in customers if customer.id not in existing_customer_ids]
     return render_template(
         'leaderboards/detail.html', board=board, entries=entries, customers=customers
@@ -2383,7 +2394,7 @@ def settings():
         name=request.form['name'].strip()
         if name: db.session.add(model(owner_id=g.creator.id, name=name)); db.session.commit(); flash('Setting added.','success')
         return redirect(url_for('settings'))
-    return render_template('settings/index.html', categories=Category.query.order_by(Category.name).all(), platforms=Platform.query.order_by(Platform.name).all(), payments=PaymentMethod.query.order_by(PaymentMethod.name).all())
+    return render_template('settings/index.html', categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all(), platforms=Platform.query.filter_by(owner_id=g.creator.id).order_by(Platform.name).all(), payments=PaymentMethod.query.filter_by(owner_id=g.creator.id).order_by(PaymentMethod.name).all())
 
 @app.route('/settings/<kind>/<int:id>/edit', methods=['GET','POST'])
 def setting_edit(kind,id):
