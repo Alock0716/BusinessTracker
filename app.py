@@ -390,6 +390,11 @@ def _migrate_tenant_schema(legacy_creator_id):
         db.session.execute(text(
             f'UPDATE {table} SET owner_id = :owner_id WHERE owner_id IS NULL'
         ), {'owner_id': legacy_creator_id})
+    if db.engine.dialect.name == 'postgresql':
+        for table in TENANT_TABLES:
+            db.session.execute(text(
+                f'ALTER TABLE "{table}" ALTER COLUMN owner_id SET NOT NULL'
+            ))
     db.session.commit()
 
     inspector = inspect(db.engine)
