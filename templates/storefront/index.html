@@ -20,7 +20,7 @@
             <div class="public-item-meta"><a href="{{url_for('seller_store', username=seller.username)}}">{{seller.display_name or seller.username}}</a>{% if not seller.display_name %}<span>@{{seller.username}}</span>{% endif %}{% if category %}<span>{{category.name}}</span>{% endif %}</div>
             <h3><a href="{{url_for('seller_store', username=seller.username)}}">{{product.name}}</a></h3>
             {% if product.description %}<p>{{product.description}}</p>{% endif %}
-            <div class="public-price">{{money(product.base_price)}}</div>
+            {% if product.base_price_enabled %}<div class="public-price">{{money(product.base_price)}}</div>{% else %}<div class="public-price">Choose a pricing option</div>{% endif %}
             {% set active_bundles = product.bundles|selectattr('active')|list %}
             {% if active_bundles %}<ul class="public-option-list">{% for option in active_bundles %}<li>{{option.name}} <span>{{money(option.price)}}</span></li>{% endfor %}</ul>{% endif %}
             {% set active_addons = product.addons|selectattr('active')|list %}

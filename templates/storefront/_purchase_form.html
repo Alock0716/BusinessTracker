@@ -4,10 +4,13 @@
 <details class="public-purchase-details">
     <summary>Buy this item</summary>
     <form method="post" action="{{url_for('public_product_checkout', username=seller.username, product_id=product.id)}}" class="public-purchase-form">
-        <label>Quantity<input type="number" name="quantity" min="1" max="99" step="1" value="1" required></label>
-        {% if active_bundles %}
+        <label>{{product.quantity_label or 'Quantity'}}<input type="number" name="quantity" min="1" max="99" step="1" value="1" required></label>
+        {% if active_bundles or not product.base_price_enabled %}
         <label>Package
-            <select name="bundle_id"><option value="">Standard · {{money(product.base_price)}}</option>{% for bundle in active_bundles %}<option value="{{bundle.id}}">{{bundle.name}} · {{money(bundle.price)}}</option>{% endfor %}</select>
+            <select name="bundle_id" {% if not product.base_price_enabled %}required{% endif %}>
+                {% if product.base_price_enabled %}<option value="">Standard · {{money(product.base_price)}}</option>{% else %}<option value="">Choose a package (required)</option>{% endif %}
+                {% for bundle in active_bundles %}<option value="{{bundle.id}}">{{bundle.name}} · {{money(bundle.price)}}</option>{% endfor %}
+            </select>
         </label>
         {% endif %}
         {% if active_addons %}

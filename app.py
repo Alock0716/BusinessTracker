@@ -1,3 +1,6 @@
+from models import db, CreatorAccount, StoreCustomer, SellerNotification, ServiceSubscription, Category, Platform, PaymentMethod, Customer, Leaderboard, LeaderboardEntry, Product, ProductTag, ProductField, ProductAddon, ProductBundle, Sale, SaleItem, SaleItemField, SaleItemAddon
+TENANT_MODELS = (Category, Platform, PaymentMethod, Customer, Leaderboard, Product, ProductTag, Sale, SellerNotification, ServiceSubscription)
+TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale', 'service_subscription')
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from email.message import EmailMessage
@@ -17,7 +20,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from werkzeug.security import check_password_hash, generate_password_hash
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from config import Config
-from models import db, CreatorAccount, StoreCustomer, SellerNotification, Category, Platform, PaymentMethod, Customer, Leaderboard, LeaderboardEntry, Product, ProductTag, ProductField, ProductAddon, ProductBundle, Sale, SaleItem, SaleItemField, SaleItemAddon
+from models import db, CreatorAccount, StoreCustomer, SellerNotification, Category, Platform, PaymentMethod, Customer, Leaderboard, LeaderboardEntry, Product, ProductTag, ProductField, ProductAddon, ProductBundle, ServiceSubscription, Sale, SaleItem, SaleItemField, SaleItemAddon
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -25,7 +28,7 @@ db.init_app(app)
 
 LOGIN_USERNAME = app.config.get('LOGIN_USERNAME', 'admin')
 LOGIN_PASSWORD = app.config.get('LOGIN_PASSWORD', 'change-me')
-TENANT_MODELS = (Category, Platform, PaymentMethod, Customer, Leaderboard, Product, ProductTag, Sale, SellerNotification)
+TENANT_MODELS = (Category, Platform, PaymentMethod, Customer, Leaderboard, Product, ProductTag, Sale, SellerNotification, ServiceSubscription)
 PUBLIC_ENDPOINTS = {
     'login', 'register', 'logout', 'storefront', 'public_leaderboards', 'seller_store',
     'public_leaderboard', 'store_customer_login', 'store_customer_register',
@@ -59,6 +62,39 @@ def scope_creator_queries(execute_state):
         for model in TENANT_MODELS
     ))
 
+def _expire_service_subscriptions(owner_id):
+    today = date.today()
+    expiring = ServiceSubscription.query.filter(
+        ServiceSubscription.owner_id == owner_id,
+        ServiceSubscription.status == 'active',
+        ServiceSubscription.current_period_end < today,
+    ).all()
+    for subscription in expiring:
+        subscription.status = 'expired'
+        subscription.last_notified_period_end = subscription.current_period_end
+        db.session.add(SellerNotification(
+            owner_id=owner_id,
+            service_subscription_id=subscription.id,
+            title='Service subscription expired',
+            message=(
+                f'{subscription.customer.name}’s subscription to '
+                f'{subscription.product.name} expired on '
+                f'{subscription.current_period_end:%b %d, %Y}.'
+            ),
+        ))
+    if expiring:
+        db.session.commit()
+    return len(expiring)
+
+@app.cli.command('expire-service-subscriptions')
+def expire_service_subscriptions_command():
+    owner_ids = db.session.query(ServiceSubscription.owner_id).filter(
+        ServiceSubscription.status == 'active',
+        ServiceSubscription.current_period_end < date.today(),
+    ).distinct().all()
+    expired_count = sum(_expire_service_subscriptions(owner_id) for (owner_id,) in owner_ids)
+    print(f'Expired {expired_count} service subscription(s).')
+
 @app.before_request
 def require_creator():
     if request.endpoint in PUBLIC_ENDPOINTS:
@@ -70,6 +106,8 @@ def require_creator():
             if creator and creator.is_approved:
                 g.creator = creator
                 g.is_admin = creator.is_admin
+                if not creator.is_admin:
+                    _expire_service_subscriptions(creator.id)
             else:
                 session.clear()
         return
@@ -81,6 +119,8 @@ def require_creator():
     g.creator = creator
     g.creator_id = creator.id
     g.is_admin = creator.is_admin
+    if not creator.is_admin:
+        _expire_service_subscriptions(creator.id)
     if request.endpoint and request.endpoint.startswith('admin_') and not creator.is_admin:
         abort(403)
     if not creator.is_admin and not creator.subscription_exempt and creator.stripe_subscription_status not in ACTIVE_SUBSCRIPTION_STATUSES:
@@ -202,7 +242,7 @@ def register():
             db.session.flush()
             db.session.add_all([
                 Category(owner_id=creator.id, name=name)
-                for name in ('General', 'Services', 'Products')
+                for name in ('General', 'Services', 'Products', 'Subscriptions')
             ])
             db.session.add_all([
                 Platform(owner_id=creator.id, name=name)
@@ -341,7 +381,93 @@ def notification_read(id):
         db.session.commit()
     return redirect(request.form.get('next') or url_for('notifications'))
 
-TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale')
+SERVICE_SUBSCRIPTION_STATUSES = ('active', 'paused', 'canceled', 'expired')
+
+def _subscription_products(owner_id):
+    return Product.query.join(Category, Product.category_id == Category.id).filter(
+        Product.owner_id == owner_id, Product.active.is_(True),
+        Category.owner_id == owner_id, func.lower(Category.name) == 'subscriptions',
+    ).order_by(Product.name).all()
+
+@app.route('/subscriptions')
+def service_subscriptions():
+    query = ServiceSubscription.query.options(
+        joinedload(ServiceSubscription.customer), joinedload(ServiceSubscription.product),
+    ).filter(ServiceSubscription.owner_id == g.creator.id).order_by(
+        case((ServiceSubscription.status == 'active', 0), else_=1),
+        ServiceSubscription.current_period_end, ServiceSubscription.id,
+    )
+    pagination = query.paginate(
+        page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
+    )
+    return render_template(
+        'subscriptions/index.html', subscriptions=pagination.items,
+        customers=Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all(),
+        products=_subscription_products(g.creator.id),
+        statuses=SERVICE_SUBSCRIPTION_STATUSES, pagination=pagination,
+        previous_url=url_for('service_subscriptions', page=pagination.prev_num) if pagination.has_prev else None,
+        next_url=url_for('service_subscriptions', page=pagination.next_num) if pagination.has_next else None,
+        today=date.today(),
+    )
+
+@app.route('/subscriptions/new', methods=['POST'])
+def service_subscription_new():
+    customer_id = request.form.get('customer_id', type=int)
+    product_id = request.form.get('product_id', type=int)
+    end_value = request.form.get('current_period_end', '').strip()
+    start_value = request.form.get('started_at', '').strip()
+    customer = Customer.query.filter_by(id=customer_id, owner_id=g.creator.id).first() if customer_id else None
+    product = next((item for item in _subscription_products(g.creator.id) if item.id == product_id), None)
+    try:
+        started_at = date.fromisoformat(start_value) if start_value else date.today()
+        current_period_end = date.fromisoformat(end_value)
+    except ValueError:
+        flash('Choose a valid subscription start and end date.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    if customer is None or product is None:
+        flash('Choose a customer and a product in your Subscriptions category.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    if current_period_end < started_at:
+        flash('The subscription end date must be on or after its start date.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    subscription = ServiceSubscription(
+        owner_id=g.creator.id, customer_id=customer.id, product_id=product.id,
+        started_at=started_at, current_period_end=current_period_end,
+        status='active', notes=request.form.get('notes', '').strip() or None,
+    )
+    db.session.add(subscription)
+    db.session.commit()
+    flash('Customer subscription added.', 'success')
+    return redirect(url_for('service_subscriptions'))
+
+@app.route('/subscriptions/<int:id>/update', methods=['POST'])
+def service_subscription_update(id):
+    subscription = ServiceSubscription.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
+    if not _form_version_matches(subscription):
+        return redirect(url_for('service_subscriptions'))
+    status = request.form.get('status', '')
+    end_value = request.form.get('current_period_end', '').strip()
+    if status not in SERVICE_SUBSCRIPTION_STATUSES:
+        flash('Choose a valid subscription status.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    try:
+        current_period_end = date.fromisoformat(end_value)
+    except ValueError:
+        flash('Choose a valid subscription end date.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    if status == 'active' and current_period_end < date.today():
+        flash('Set a future end date before marking this subscription active.', 'error')
+        return redirect(url_for('service_subscriptions'))
+    if current_period_end != subscription.current_period_end or status == 'active':
+        subscription.last_notified_period_end = None
+    subscription.current_period_end = current_period_end
+    subscription.status = status
+    subscription.notes = request.form.get('notes', '').strip() or None
+    db.session.commit()
+    flash('Customer subscription updated.', 'success')
+    return redirect(url_for('service_subscriptions'))
+
+TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale', 'service_subscription')
 TENANT_NAME_TABLES = {
     'category': (
         'id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES creator_account(id), '
@@ -581,6 +707,25 @@ with app.app_context():
             db.session.execute(text(
                 f'ALTER TABLE {table_name} ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT TRUE'
             ))
+    product_columns = {column['name'] for column in inspect(db.engine).get_columns('product')}
+    product_migrations = {
+        'base_price_enabled': 'BOOLEAN NOT NULL DEFAULT TRUE',
+        'quantity_label': "VARCHAR(40) NOT NULL DEFAULT 'Quantity'",
+    }
+    for column_name, definition in product_migrations.items():
+        if column_name not in product_columns:
+            db.session.execute(text(
+                f'ALTER TABLE product ADD COLUMN {column_name} {definition}'
+            ))
+    notification_columns = {
+        column['name'] for column in inspect(db.engine).get_columns('seller_notification')
+    }
+    if 'service_subscription_id' not in notification_columns:
+        db.session.execute(text(
+            'ALTER TABLE seller_notification ADD COLUMN service_subscription_id '
+            'INTEGER REFERENCES service_subscription(id)'
+        ))
+    db.session.commit()
     example_note = 'EXAMPLE DATA: Starter sale demonstrates related records.'
     for table_name, example_name in (
         ('product', 'Example: Custom consultation'),
@@ -632,6 +777,14 @@ with app.app_context():
         db.session.execute(text(
             "ALTER TABLE sale_item_addon ADD COLUMN price_mode VARCHAR(20) NOT NULL DEFAULT 'per_quantity'"
         ))
+    notification_columns = {
+        column['name'] for column in inspect(db.engine).get_columns('seller_notification')
+    }
+    if 'service_subscription_id' not in notification_columns:
+        db.session.execute(text(
+            'ALTER TABLE seller_notification ADD COLUMN service_subscription_id '
+            'INTEGER REFERENCES service_subscription(id)'
+        ))
     db.session.commit()
     # Small migrations for databases created by earlier SQLite versions.
     # PostgreSQL databases are expected to be created from the current models.
@@ -650,12 +803,19 @@ with app.app_context():
             db.session.rollback()
     if legacy_creator:
         if not Category.query.filter_by(owner_id=legacy_creator.id).first():
-            db.session.add_all([Category(owner_id=legacy_creator.id, name=name) for name in ('General', 'Services', 'Products')])
+            db.session.add_all([Category(owner_id=legacy_creator.id, name=name) for name in ('General', 'Services', 'Products', 'Subscriptions')])
         if not Platform.query.filter_by(owner_id=legacy_creator.id).first():
             db.session.add_all([Platform(owner_id=legacy_creator.id, name=name) for name in ('Website', 'Etsy', 'In Person', 'Other')])
         if not PaymentMethod.query.filter_by(owner_id=legacy_creator.id).first():
             db.session.add_all([PaymentMethod(owner_id=legacy_creator.id, name=name) for name in ('Cash', 'Card', 'Gift Card', 'Product Exchange')])
         db.session.commit()
+    db.session.execute(text(
+        "INSERT INTO category (owner_id, name) "
+        "SELECT creator_account.id, 'Subscriptions' FROM creator_account "
+        "WHERE NOT EXISTS (SELECT 1 FROM category "
+        "WHERE category.owner_id = creator_account.id AND category.name = 'Subscriptions')"
+    ))
+    db.session.commit()
     for table in db.metadata.tables.values():
         for index in table.indexes:
             index.create(bind=db.engine, checkfirst=True)
@@ -942,6 +1102,8 @@ def _remove_creator_examples(owner_id):
             db.session.delete(record)
 
 def _delete_creator_records(owner_id):
+    for subscription in ServiceSubscription.query.filter_by(owner_id=owner_id).all():
+        db.session.delete(subscription)
     for sale in Sale.query.filter_by(owner_id=owner_id).all():
         db.session.delete(sale)
     for board in Leaderboard.query.filter_by(owner_id=owner_id).all():
@@ -1236,6 +1398,9 @@ def public_product_checkout(username, product_id):
         bundle = next((option for option in product.bundles if option.id == bundle_id and option.active), None)
         if bundle is None:
             abort(400, description='That pricing option is not available for this product.')
+    if not product.base_price_enabled and bundle is None:
+        flash('Choose a pricing bundle for this product.', 'error')
+        return redirect(url_for('seller_store', username=seller.username))
     unit_price = money(bundle.price if bundle else product.base_price)
     if unit_price < 0:
         abort(400, description='Product prices cannot be negative.')
@@ -1502,15 +1667,28 @@ def products():
 @app.route('/products/new', methods=['GET','POST'])
 def product_new():
     if request.method == 'POST':
+        base_price_enabled = request.form.get('base_price_enabled') == '1'
+        quantity_label = request.form.get('quantity_label', '').strip()[:40] or 'Quantity'
+        if not base_price_enabled and not _has_priced_bundle_form():
+            flash('Add at least one named bundle with a price before disabling the base price.', 'error')
+            return redirect(url_for('product_new'))
         category_id = request.form.get('category_id') or None
         category = Category.query.filter_by(id=category_id, owner_id=g.creator.id).first() if category_id else None
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_new'))
-        p=Product(owner_id=g.creator.id, name=request.form['name'], description=request.form.get('description'), base_price=money(request.form.get('base_price')), category_id=category.id if category else None, is_public=request.form.get('is_public', '1') == '1')
+        p=Product(owner_id=g.creator.id, name=request.form['name'], description=request.form.get('description'), base_price=money(request.form.get('base_price')) if base_price_enabled else 0, base_price_enabled=base_price_enabled, quantity_label=quantity_label, category_id=category.id if category else None, is_public=request.form.get('is_public', '1') == '1')
         db.session.add(p); db.session.flush(); _save_product_children(p)
         db.session.commit(); flash('Product created.','success'); return redirect(url_for('products'))
     return render_template('products/form.html', product=None, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
+
+def _has_priced_bundle_form():
+    names = request.form.getlist('bundle_name')
+    prices = request.form.getlist('bundle_price')
+    return any(
+        name.strip() and money(price) > 0
+        for name, price in zip(names, prices)
+    )
 
 @app.route('/products/<int:id>/edit', methods=['GET','POST'])
 def product_edit(id):
@@ -1521,12 +1699,17 @@ def product_edit(id):
     if request.method == 'POST' and not _form_version_matches(p):
         return redirect(url_for('product_edit', id=p.id))
     if request.method=='POST':
+        base_price_enabled = request.form.get('base_price_enabled') == '1'
+        quantity_label = request.form.get('quantity_label', '').strip()[:40] or 'Quantity'
+        if not base_price_enabled and not _has_priced_bundle_form():
+            flash('Add at least one named bundle with a price before disabling the base price.', 'error')
+            return redirect(url_for('product_edit', id=p.id))
         category_id = request.form.get('category_id') or None
         category = Category.query.filter_by(id=category_id, owner_id=g.creator.id).first() if category_id else None
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_edit', id=p.id))
-        p.name=request.form['name']; p.description=request.form.get('description'); p.base_price=money(request.form.get('base_price')); p.category_id=category.id if category else None; p.is_public=request.form.get('is_public') == '1'
+        p.name=request.form['name']; p.description=request.form.get('description'); p.base_price=money(request.form.get('base_price')) if base_price_enabled else 0; p.base_price_enabled=base_price_enabled; p.quantity_label=quantity_label; p.category_id=category.id if category else None; p.is_public=request.form.get('is_public') == '1'
         ProductField.query.filter_by(product_id=p.id).delete(); ProductAddon.query.filter_by(product_id=p.id).delete(); ProductBundle.query.filter_by(product_id=p.id).delete()
         _save_product_children(p); db.session.commit(); flash('Product updated.','success'); return redirect(url_for('products'))
     return render_template('products/form.html', product=p, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
@@ -1536,7 +1719,7 @@ def product_delete(id):
     p=Product.query.get_or_404(id)
     if not _form_version_matches(p):
         return redirect(url_for('products'))
-    if SaleItem.query.filter_by(product_id=p.id).first():
+    if SaleItem.query.filter_by(product_id=p.id).first() or ServiceSubscription.query.filter_by(product_id=p.id).first():
         flash('This product cannot be deleted because it has sales history. Deactivate it instead.','error')
     else:
         db.session.delete(p); db.session.commit(); flash('Product deleted.','success')
@@ -1570,7 +1753,8 @@ def _save_product_children(p):
             db.session.add(ProductAddon(
                 product=p, name=n.strip(), description=ad[i] if i<len(ad) else None,
                 price=money(ap[i] if i<len(ap) else 0),
-                price_mode=price_mode, quantity_unit=au[i].strip()[:40] if i<len(au) else None,
+                price_mode=price_mode,
+                quantity_unit=au[i].strip()[:40] if i<len(au) and price_mode == 'per_quantity' else None,
                 labor_hours=money(ah[i] if i<len(ah) else 0),
             ))
     bn=request.form.getlist('bundle_name'); bd=request.form.getlist('bundle_description'); ba=request.form.getlist('bundle_amount'); bu=request.form.getlist('bundle_unit'); bp=request.form.getlist('bundle_price'); bh=request.form.getlist('bundle_labor')
@@ -1580,6 +1764,8 @@ def _save_product_children(p):
 def _product_json(products):
     return {str(p.id): {
         'price': str(p.base_price or 0),
+        'base_price_enabled': bool(p.base_price_enabled),
+        'quantity_label': p.quantity_label or 'Quantity',
         'tags': [tag.name for tag in p.tags],
         'fields': [{'id': f.id, 'name': f.name, 'type': f.field_type, 'unit': f.unit or '', 'required': bool(f.required)} for f in p.fields],
         'addons': [{'id': a.id, 'name': a.name, 'description': a.description or '', 'price': str(a.price or 0), 'price_mode': a.price_mode or 'per_quantity', 'quantity_unit': a.quantity_unit or '', 'labor': str(a.labor_hours or 0)} for a in p.addons if a.active],
@@ -1868,6 +2054,10 @@ def _sale_form(sale):
                     db.session.rollback()
                     flash('Choose a pricing option from the selected product.', 'error')
                     return redirect(request.path)
+            if not product.base_price_enabled and bundle_id is None:
+                db.session.rollback()
+                flash('Choose a pricing option for this product.', 'error')
+                return redirect(request.path)
             item=SaleItem(sale=sale, product_id=product.id, bundle_id=bundle_id, quantity=q, unit_price=price, labor_hours=h); db.session.add(item); db.session.flush()
             field_ids=request.form.getlist(f'field_id_{i}'); field_values=request.form.getlist(f'field_value_{i}')
             for j,fid in enumerate(field_ids):
@@ -1886,7 +2076,9 @@ def _sale_form(sale):
                     continue
                 if aid_int not in product_addons: continue
                 a=product_addons[aid_int]
-                aq=money(request.form.get(f'addon_quantity_{i}_{aid_int}', '1'))
+                aq=Decimal('1') if a.price_mode == 'flat' else money(
+                    request.form.get(f'addon_quantity_{i}_{aid_int}', '1')
+                )
                 db.session.add(SaleItemAddon(
                     sale_item=item, product_addon_id=a.id, quantity=aq,
                     unit_price=a.price, price_mode=a.price_mode,
@@ -2035,8 +2227,8 @@ def customer_delete(id):
     c=Customer.query.get_or_404(id)
     if not _form_version_matches(c):
         return redirect(url_for('customers'))
-    if c.sales:
-        flash('Customer cannot be deleted while sales are attached. Edit the customer or remove/assign those sales first.','error')
+    if c.sales or ServiceSubscription.query.filter_by(customer_id=c.id, owner_id=g.creator.id).first():
+        flash('Customer cannot be deleted while sales or subscriptions are attached. Remove or reassign those records first.','error')
     else:
         db.session.delete(c); db.session.commit(); flash('Customer deleted.','success')
     return redirect(url_for('customers'))

@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width,initial-scale=1">
 	<title>{% block title %}Business Tracker{% endblock %}</title>
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+	<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 <body>
 	<button class="mobile-menu-button" type="button" aria-label="Open navigation" onclick="document.body.classList.toggle('nav-open')">☰</button>
@@ -17,6 +18,7 @@
 			<a href="{{url_for('dashboard')}}">Dashboard</a>
 			<a href="{{url_for('products')}}">Products</a>
 			<a href="{{url_for('sales')}}">Sales</a>
+			<a href="{{url_for('service_subscriptions')}}">Subscriptions</a>
 			<a href="{{url_for('notifications')}}">Notifications{% if unread_notifications %} ({{unread_notifications|length}}){% endif %}</a>
 			<a href="{{url_for('customers')}}">Customers</a>
 			<a href="{{url_for('leaderboards')}}">Leaderboards</a>
@@ -32,7 +34,7 @@
 		{% for notification in unread_notifications %}
 			<div class="sale-notification-banner" role="status">
 				<strong>{{notification.title}}</strong> {{notification.message}}
-				<a href="{{url_for('sales')}}">View sales</a>
+				<a href="{{url_for('service_subscriptions') if notification.service_subscription_id else url_for('sales')}}">{{'View subscriptions' if notification.service_subscription_id else 'View sales'}}</a>
 				<form method="post" action="{{url_for('notification_read', id=notification.id)}}"><input type="hidden" name="next" value="{{request.full_path}}"><button class="icon-button" type="submit" aria-label="Dismiss notification">×</button></form>
 			</div>
 		{% endfor %}

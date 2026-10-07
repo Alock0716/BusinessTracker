@@ -6,7 +6,10 @@
   {% if product %}<input type="hidden" name="version_id" value="{{product.version_id}}">{% endif %}
   <label>Name<input name="name" required value="{{product.name if product else ''}}"></label>
   <label>Category<select name="category_id"><option value="">None</option>{% for c in categories %}<option value="{{c.id}}" {% if product and product.category_id==c.id %}selected{% endif %}>{{c.name}}</option>{% endfor %}</select></label>
-  <label>Base Price<input type="number" step="0.01" name="base_price" value="{{product.base_price if product else 0}}"></label>
+  <label>Base Price<input id="basePriceInput" type="number" step="0.01" name="base_price" value="{{product.base_price if product else 0}}"><span class="muted">Used when customers choose the standard option.</span></label>
+  <label>Product quantity label<input name="quantity_label" maxlength="40" value="{{product.quantity_label if product else 'Quantity'}}" placeholder="e.g. sessions, items, hours" required></label>
+  <label class="check visibility-toggle"><input id="basePriceEnabled" type="checkbox" name="base_price_enabled" value="1" {% if not product or product.base_price_enabled %}checked{% endif %}> Offer base price</label>
+  <p class="muted product-pricing-hint">Turn off the base price to require a customer to choose one of the bundles below.</p>
   <label>Description<textarea name="description">{{product.description if product else ''}}</textarea></label>
   <label>Product tags<input name="tags" maxlength="500" value="{{(product.tags|map(attribute='name')|join(', ')) if product else ''}}" placeholder="e.g. Digital, Rush, Commission"><span class="muted">Separate tags with commas. Use these to find products and related sales.</span></label>
   <label class="check visibility-toggle"><input type="checkbox" name="is_public" value="1" {% if not product or product.is_public %}checked{% endif %}> Show on public storefront</label>
@@ -38,12 +41,12 @@
       </div>
       <div class="addon-pricing-grid">
         <label>Charge model
-          <select name="addon_price_mode">
+          <select name="addon_price_mode" class="addon-price-mode" onchange="syncAddonUnitLabel(this)">
             <option value="flat" {{'selected' if a.price_mode == 'flat' else ''}}>Flat per sale item</option>
             <option value="per_quantity" {{'selected' if a.price_mode != 'flat' else ''}}>Per item quantity</option>
           </select>
         </label>
-        <label>Quantity unit<input name="addon_quantity_unit" maxlength="40" value="{{a.quantity_unit or ''}}" placeholder="e.g. minutes, hours"></label>
+        <label class="addon-unit-label" {% if a.price_mode == 'flat' %}hidden{% endif %}>Unit label<input name="addon_quantity_unit" maxlength="40" value="{{a.quantity_unit or ''}}" placeholder="e.g. minutes, hours"></label>
       </div>
       <label class="product-child-description">Description (optional)<textarea name="addon_description" placeholder="What does this extra include?">{{a.description or ''}}</textarea></label>
     </div>{% endfor %}{% endif %}
@@ -72,7 +75,14 @@
 </form>
 <script>
 function addProductField(){document.getElementById('fields').insertAdjacentHTML('beforeend', `<div class="row child-row"><label>Field name<input name="field_name" placeholder="e.g. Size or Session code"></label><label>Input type<select name="field_type"><option>text</option><option>number</option><option>decimal</option><option>date</option></select></label><label>Unit (optional)<input name="field_unit" placeholder="e.g. inches"></label><label class="check"><input type="checkbox" name="field_required" value="new"> Required</label><button type="button" class="danger button secondary" onclick="this.parentElement.remove()">Remove item</button></div>`)}
-function addProductAddon(){document.getElementById('addons').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><label>Add-on name<input name="addon_name" placeholder="e.g. Rush delivery"></label><label>Price<input name="addon_price" type="number" step="0.01" placeholder="0.00"></label><label>Extra labor hours<input name="addon_labor" type="number" step="0.01" placeholder="0"></label><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove add-on</button></div><div class="addon-pricing-grid"><label>Charge model<select name="addon_price_mode"><option value="flat">Flat per sale item</option><option value="per_quantity" selected>Per item quantity</option></select></label><label>Quantity unit<input name="addon_quantity_unit" maxlength="40" placeholder="e.g. minutes, hours"></label></div><label class="product-child-description">Description (optional)<textarea name="addon_description" placeholder="What does this extra include?"></textarea></label></div>`)}
+function syncAddonUnitLabel(select){const label=select.closest('.addon-pricing-grid').querySelector('.addon-unit-label');if(label)label.hidden=select.value==='flat'}
+function addProductAddon(){document.getElementById('addons').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><label>Add-on name<input name="addon_name" placeholder="e.g. Rush delivery"></label><label>Price<input name="addon_price" type="number" step="0.01" placeholder="0.00"></label><label>Extra labor hours<input name="addon_labor" type="number" step="0.01" placeholder="0"></label><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove add-on</button></div><div class="addon-pricing-grid"><label>Charge model<select name="addon_price_mode" class="addon-price-mode" onchange="syncAddonUnitLabel(this)"><option value="flat">Flat per sale item</option><option value="per_quantity" selected>Per item quantity</option></select></label><label class="addon-unit-label">Unit label<input name="addon_quantity_unit" maxlength="40" placeholder="e.g. minutes, hours"></label></div><label class="product-child-description">Description (optional)<textarea name="addon_description" placeholder="What does this extra include?"></textarea></label></div>`)}
 function addBundle(){document.getElementById('bundles').insertAdjacentHTML('beforeend', `<div class="child-card"><div class="row"><label>Option name<input name="bundle_name" placeholder="e.g. 30-minute session"></label><label>Amount<input name="bundle_amount" type="number" step="0.01" value="1" placeholder="1"></label><label>Unit<input name="bundle_unit" placeholder="e.g. minutes, items"></label><label>Price<input name="bundle_price" type="number" step="0.01" placeholder="0.00"></label><label>Labor hours<input name="bundle_labor" type="number" step="0.01" placeholder="0"></label><button type="button" class="danger button secondary" onclick="this.parentElement.parentElement.remove()">Remove option</button></div><label class="product-child-description">Description (optional)<textarea name="bundle_description" placeholder="What does this package include?"></textarea></label></div>`)}
+document.querySelectorAll('.addon-price-mode').forEach(syncAddonUnitLabel);
+const basePriceToggle=document.getElementById('basePriceEnabled');
+const basePriceInput=document.getElementById('basePriceInput');
+function syncBasePriceInput(){basePriceInput.disabled=!basePriceToggle.checked}
+basePriceToggle.addEventListener('change',syncBasePriceInput);
+syncBasePriceInput();
 </script>
 {% endblock %}

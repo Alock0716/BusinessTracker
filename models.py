@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -80,6 +80,7 @@ class Customer(db.Model):
     __mapper_args__ = {'version_id_col': version_id}
     sales = db.relationship('Sale', backref='customer', lazy=True)
     leaderboard_entries = db.relationship('LeaderboardEntry', back_populates='customer', cascade='all, delete-orphan', lazy=True)
+    service_subscriptions = db.relationship('ServiceSubscription', back_populates='customer', lazy=True)
 
 class StoreCustomer(db.Model):
     __tablename__ = 'store_customer'
@@ -128,6 +129,8 @@ class Product(db.Model):
     name = db.Column(db.String(160), nullable=False)
     description = db.Column(db.Text)
     base_price = db.Column(db.Numeric(12,2), default=0)
+    base_price_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    quantity_label = db.Column(db.String(40), nullable=False, default='Quantity')
     active = db.Column(db.Boolean, default=True)
     is_public = db.Column(db.Boolean, nullable=False, default=True)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
@@ -143,6 +146,7 @@ class Product(db.Model):
     bundles = db.relationship('ProductBundle', backref='product', cascade='all, delete-orphan', lazy=True)
     tags = db.relationship('ProductTag', secondary=product_tag_link, back_populates='products')
     items = db.relationship('SaleItem', backref='product', lazy=True)
+    service_subscriptions = db.relationship('ServiceSubscription', back_populates='product', lazy=True)
 
 class ProductField(db.Model):
     """Product-specific information to capture when recording a sale."""
@@ -178,6 +182,26 @@ class ProductBundle(db.Model):
     labor_hours = db.Column(db.Numeric(12,2), default=0)
     active = db.Column(db.Boolean, default=True)
     __table_args__ = (db.Index('ix_product_bundle_product_active', 'product_id', 'active'),)
+
+class ServiceSubscription(db.Model):
+    __tablename__ = 'service_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('creator_account.id'), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='active')
+    started_at = db.Column(db.Date, nullable=False, default=date.today)
+    current_period_end = db.Column(db.Date, nullable=False)
+    last_notified_period_end = db.Column(db.Date)
+    notes = db.Column(db.Text)
+    version_id = db.Column(db.Integer, nullable=False, default=1)
+    __table_args__ = (
+        db.Index('ix_service_subscription_owner_status_end', 'owner_id', 'status', 'current_period_end'),
+        db.Index('ix_service_subscription_customer', 'customer_id'),
+    )
+    __mapper_args__ = {'version_id_col': version_id}
+    customer = db.relationship('Customer', back_populates='service_subscriptions')
+    product = db.relationship('Product', back_populates='service_subscriptions')
 
 class ProductTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -258,8 +282,12 @@ class SellerNotification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('creator_account.id'), nullable=False)
     sale_id = db.Column(db.Integer, db.ForeignKey('sale.id', ondelete='SET NULL'))
+    service_subscription_id = db.Column(db.Integer, db.ForeignKey('service_subscription.id', ondelete='SET NULL'))
     title = db.Column(db.String(160), nullable=False)
     message = db.Column(db.String(500), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     read_at = db.Column(db.DateTime)
-    __table_args__ = (db.Index('ix_notification_owner_read_created', 'owner_id', 'read_at', 'created_at'),)
+    __table_args__ = (
+        db.Index('ix_notification_owner_read_created', 'owner_id', 'read_at', 'created_at'),
+        db.Index('ix_notification_service_subscription', 'service_subscription_id'),
+    )

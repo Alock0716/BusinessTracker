@@ -108,7 +108,7 @@ function addItem(saved = null) {
         </label>
       </div>
       <div>
-        <label>Qty
+        <label><span class="sale-quantity-label">Quantity</span>
           <input name="quantity" type="number" step="0.01" min="0" value="1">
         </label>
       </div>
@@ -149,6 +149,7 @@ function refreshItem(select, saved = null) {
     return;
   }
 
+  card.querySelector('.sale-quantity-label').textContent = data.quantity_label || 'Quantity';
   card.querySelector('[name="unit_price"]').value = saved?.unit_price ?? data.price ?? 0;
   card.querySelector('[name="labor_hours"]').value = saved?.labor_hours ?? 0;
 
@@ -165,8 +166,8 @@ function refreshItem(select, saved = null) {
   if (data.bundles.length) {
     html += `<div class="option-section">
       <label>Pricing Option
-        <select name="bundle_id" class="option-control">
-          <option value="">Base price</option>
+        <select name="bundle_id" class="option-control" ${data.base_price_enabled ? '' : 'required'}>
+          ${data.base_price_enabled ? '<option value="">Base price</option>' : '<option value="">Choose a required pricing option</option>'}
           ${data.bundles.map(b => `<option value="${b.id}" data-price="${esc(b.price)}" data-labor="${esc(b.labor)}">${esc(b.name)} — ${esc(b.amount)} ${esc(b.unit)} — $${Number(b.price).toFixed(2)}</option>`).join('')}
         </select>
       </label>
@@ -184,7 +185,7 @@ function refreshItem(select, saved = null) {
               <span><strong>${esc(a.name)}</strong>${a.description ? `<small>${esc(a.description)}</small>` : ''}</span>
             </label>
             <span class="addon-meta">+$${Number(a.price).toFixed(2)} ${a.price_mode === 'flat' ? 'one-time' : `per ${esc(a.quantity_unit || 'item')}`} · +${Number(a.labor || 0).toFixed(2)} hrs</span>
-            <input name="addon_quantity_${card.dataset.index}_${a.id}" class="addon-qty" type="number" step="0.01" min="0" value="1" aria-label="${esc(a.name)} quantity">
+            ${a.price_mode === 'flat' ? '' : `<label class="sale-addon-quantity">${esc(a.quantity_unit || 'Quantity')}<input name="addon_quantity_${card.dataset.index}_${a.id}" class="addon-qty" type="number" step="0.01" min="0" value="1" aria-label="${esc(a.name)} quantity"></label>`}
           </div>`).join('')}
       </div>
     </div>`;

@@ -16,6 +16,7 @@
             <div><strong>{{notification.title}}</strong><p>{{notification.message}}</p><small>{{notification.created_at.strftime('%b %d, %Y at %I:%M %p')}}</small></div>
             <div class="actions">
                 {% if notification.sale_id %}<a class="button secondary" href="{{url_for('sale_edit', id=notification.sale_id)}}">View sale</a>{% endif %}
+                {% if notification.service_subscription_id %}<a class="button secondary" href="{{url_for('service_subscriptions')}}">View subscriptions</a>{% endif %}
                 {% if not notification.read_at %}<form method="post" action="{{url_for('notification_read', id=notification.id)}}"><button class="button secondary">Mark read</button></form>{% endif %}
             </div>
         </li>

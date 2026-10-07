@@ -16,7 +16,7 @@
 {% endif %}
 <div class="grid">
 	<section class="panel"><h2>Top Products</h2><table><tr><th>Product</th><th>Units</th><th>Revenue</th></tr>{% for p in top %}<tr><td>{{p.name}}</td><td>{{p.qty}}</td><td>{{money(p.rev)}}</td></tr>{% else %}<tr><td colspan="3">No sales yet.</td></tr>{% endfor %}</table></section>
-	<section class="panel"><h2>Quick Start</h2><p>Create products first, then record sales. Products can have trackable fields, bundles, and optional add-ons.</p><a class="button" href="{{url_for('product_new')}}">Create Product</a> <a class="button secondary" href="{{url_for('sale_new')}}">Record Sale</a></section>
+	<section class="panel"><h2>Quick Start</h2><p>Create products first, then record sales. Products can have trackable fields, bundles, and optional add-ons.</p><a class="button" href="{{url_for('product_new')}}">Create Product</a> <a class="button secondary" href="{{url_for('sale_new')}}">Record Sale</a> <a class="button secondary" href="{{url_for('service_subscriptions')}}">Manage subscriptions</a></section>
 </div>
 <section class="panel relationship-guide">
 	<h2>How linked records work</h2>

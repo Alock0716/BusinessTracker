@@ -1,3 +1,25 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "chat.tools.terminal.autoApprove": {
+        "/^python -c \"import app; from sqlalchemy import inspect; print\\(\\{'startup_ok': True, 'service_subscription_table': 'service_subscription' in inspect\\(app\\.db\\.engine\\)\\.get_table_names\\(\\), 'notice_link': 'service_subscription_id' in \\{c\\['name'\\] for c in inspect\\(app\\.db\\.engine\\)\\.get_columns\\('seller_notification'\\)\\}\\}\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import app; print\\('app import ok'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import uuid; from datetime import date,timedelta; import app; from models import db,CreatorAccount,Customer,Product,ServiceSubscription,SellerNotification; from werkzeug\\.security import generate_password_hash; ctx=app\\.app\\.app_context\\(\\); ctx\\.push\\(\\); n='expiry-smoke-'\\+uuid\\.uuid4\\(\\)\\.hex\\[:8\\]; u=CreatorAccount\\(username=n,email=n\\+'@example\\.test',password_hash=generate_password_hash\\('TemporaryPass123'\\),is_approved=True,subscription_exempt=True\\); db\\.session\\.add\\(u\\); db\\.session\\.flush\\(\\); c=Customer\\(owner_id=u\\.id,name='Test customer'\\); p=Product\\(owner_id=u\\.id,name='Test service',base_price=1\\); db\\.session\\.add_all\\(\\[c,p\\]\\); db\\.session\\.flush\\(\\); s=ServiceSubscription\\(owner_id=u\\.id,customer_id=c\\.id,product_id=p\\.id,current_period_end=date\\.today\\(\\)-timedelta\\(days=1\\)\\); db\\.session\\.add\\(s\\); db\\.session\\.commit\\(\\); count=app\\._expire_service_subscriptions\\(u\\.id\\); db\\.session\\.refresh\\(s\\); notification=SellerNotification\\.query\\.filter_by\\(service_subscription_id=s\\.id\\)\\.first\\(\\); print\\(\\{'expired_count':count,'status':s\\.status,'notification_created':notification is not None\\}\\); db\\.session\\.delete\\(s\\); db\\.session\\.delete\\(p\\); db\\.session\\.delete\\(c\\); db\\.session\\.delete\\(u\\); db\\.session\\.commit\\(\\); ctx\\.pop\\(\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import app; from models import CreatorAccount; from flask import session; c=app\\.app\\.test_client\\(\\); ctx=app\\.app\\.app_context\\(\\); ctx\\.push\\(\\); uid=CreatorAccount\\.query\\.filter_by\\(username='kaykohl'\\)\\.first\\(\\)\\.id; ctx\\.pop\\(\\); cm=c\\.session_transaction\\(\\); state=cm\\.__enter__\\(\\); state\\['creator_id'\\]=uid; cm\\.__exit__\\(None,None,None\\); response=c\\.get\\('/subscriptions'\\); print\\(\\{'status':response\\.status_code,'page':b'Customer Subscriptions' in response\\.data\\}\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import app; from models import db,CreatorAccount,Category; ctx=app\\.app\\.app_context\\(\\); ctx\\.push\\(\\); accounts=CreatorAccount\\.query\\.all\\(\\); print\\(\\{'startup_ok':True,'seller_count':len\\(accounts\\),'missing_subscription_categories':sum\\(Category\\.query\\.filter_by\\(owner_id=a\\.id,name='Subscriptions'\\)\\.first\\(\\) is None for a in accounts\\)\\}\\); ctx\\.pop\\(\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

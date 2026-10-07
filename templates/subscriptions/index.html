@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Customer Subscriptions{% endblock %}
+{% block heading %}Customer Subscriptions{% endblock %}
+{% block content %}
+<section class="panel subscription-create-panel">
+    <h2>Track a service subscription</h2>
+    {% if customers and products %}
+    <form method="post" action="{{url_for('service_subscription_new')}}" class="form subscription-create-form">
+        <label>Customer<select name="customer_id" required><option value="">Choose a customer</option>{% for customer in customers %}<option value="{{customer.id}}">{{customer.name}}</option>{% endfor %}</select></label>
+        <label>Subscription service<select name="product_id" required><option value="">Choose a service</option>{% for product in products %}<option value="{{product.id}}">{{product.name}}</option>{% endfor %}</select></label>
+        <label>Started<input type="date" name="started_at" value="{{today.isoformat()}}" required></label>
+        <label>Current period ends<input type="date" name="current_period_end" min="{{today.isoformat()}}" required></label>
+        <label class="subscription-notes-field">Notes<textarea name="notes" rows="2" maxlength="2000"></textarea></label>
+        <div class="actions"><button class="button">Add subscription</button></div>
+    </form>
+    {% else %}
+    <p class="muted">Add at least one customer and one active product in the Subscriptions category to track service memberships.</p>
+    <div class="actions"><a class="button secondary" href="{{url_for('customer_new')}}">Add customer</a><a class="button secondary" href="{{url_for('product_new')}}">Add subscription service</a></div>
+    {% endif %}
+</section>
+
+<section class="panel subscription-list-panel">
+    <div class="sales-results-heading"><h2>Subscriptions</h2><span class="muted">{{pagination.total}} record{{'' if pagination.total == 1 else 's'}}</span></div>
+    {% if subscriptions %}
+    <div class="table-scroll">
+        <table class="service-subscription-table">
+            <thead><tr><th>Customer</th><th>Service</th><th>Started</th><th>Period ends</th><th>Status</th><th>Notes</th><th>Update</th></tr></thead>
+            <tbody>
+                {% for subscription in subscriptions %}
+                <tr class="{{'subscription-is-expired' if subscription.status == 'expired' else ''}}">
+                    <td><a href="{{url_for('customer_edit', id=subscription.customer_id)}}">{{subscription.customer.name}}</a></td>
+                    <td>{{subscription.product.name}}</td>
+                    <td>{{subscription.started_at.strftime('%b %d, %Y')}}</td>
+                    <td>{{subscription.current_period_end.strftime('%b %d, %Y')}}</td>
+                    <td><span class="subscription-status-badge status-{{subscription.status}}">{{subscription.status|capitalize}}</span></td>
+                    <td colspan="2">
+                        <form method="post" action="{{url_for('service_subscription_update', id=subscription.id)}}" class="subscription-update-form">
+                            <input type="hidden" name="version_id" value="{{subscription.version_id}}">
+                            <select name="status" aria-label="Status for {{subscription.customer.name}}">
+                                {% for status in statuses %}<option value="{{status}}" {{'selected' if subscription.status == status else ''}}>{{status|capitalize}}</option>{% endfor %}
+                            </select>
+                            <label class="visually-hidden" for="subscription-end-{{subscription.id}}">Current period ends for {{subscription.customer.name}}</label>
+                            <input id="subscription-end-{{subscription.id}}" type="date" name="current_period_end" value="{{subscription.current_period_end.isoformat()}}" required>
+                            <label class="visually-hidden" for="subscription-notes-{{subscription.id}}">Notes for {{subscription.customer.name}}</label>
+                            <input id="subscription-notes-{{subscription.id}}" name="notes" value="{{subscription.notes or ''}}" maxlength="2000" placeholder="Notes">
+                            <button class="button secondary">Save</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="muted">No customer subscriptions yet.</p>{% endif %}
+    {% if pagination.pages > 1 %}<nav class="sales-pagination" aria-label="Subscription pages"><span>Page {{pagination.page}} of {{pagination.pages}}</span>{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

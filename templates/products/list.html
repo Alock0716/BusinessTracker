@@ -15,7 +15,7 @@ content %}<div class="toolbar"><a class="button" href="{{url_for('product_new')}
         </tr>{% for p in products %}<tr>
             <td><b>{{p.name}}</b><br><span class="muted">{{p.description or ''}}</span>{% if p.tags %}<div class="product-tag-list">{% for tag in p.tags %}<span>{{tag.name}}</span>{% endfor %}</div>{% endif %}</td>
             <td>{{p.category.name if p.category else '—'}}</td>
-            <td>{{money(p.base_price)}}</td>
+            <td>{{money(p.base_price) if p.base_price_enabled else 'Bundle pricing'}}</td>
             <td>{{p.fields|length}}</td>
             <td>{{p.addons|length}}</td>
             <td>{{p.bundles|length}}</td>
