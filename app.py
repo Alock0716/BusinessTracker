@@ -1752,13 +1752,16 @@ def _sale_form(sale):
         except ValueError:
             flash('Enter a valid due date.', 'error')
             return redirect(request.path)
+        sale_date = datetime.fromisoformat(request.form['sale_date']) if request.form.get('sale_date') else datetime.utcnow()
+        sale_category = request.form.get('sale_category', '').strip()[:120] or None
+        paid = request.form.get('paid') == '1'
         if sale is None:
-            sale=Sale(owner_id=g.creator.id); db.session.add(sale)
-        sale.sale_date=datetime.fromisoformat(request.form['sale_date']) if request.form.get('sale_date') else datetime.utcnow()
-        sale.due_date = due_date
-        sale.sale_category = request.form.get('sale_category', '').strip()[:120] or None
-        sale.status = status
-        sale.paid = request.form.get('paid') == '1'
+            sale = Sale(owner_id=g.creator.id)
+            db.session.add(sale)
+            db.session.flush()
+        else:
+            SaleItem.query.filter_by(sale_id=sale.id).delete(synchronize_session=False)
+        selected_customer = None
         customer_choice = request.form.get('customer_id', '').strip()
         if customer_choice == '__new__':
             name = request.form.get('new_customer_name', '').strip()
@@ -1775,30 +1778,31 @@ def _sale_form(sale):
             )
             db.session.add(customer)
             db.session.flush()
-            sale.customer = customer
+            selected_customer = customer
         elif customer_choice:
             try:
                 customer_id = int(customer_choice)
             except ValueError:
                 customer_id = None
-            customer = Customer.query.filter_by(id=customer_id).first() if customer_id else None
+            customer = Customer.query.filter_by(id=customer_id, owner_id=g.creator.id).first() if customer_id else None
             if not customer:
                 db.session.rollback()
                 flash('Choose a customer from your account.', 'error')
                 return redirect(request.path)
-            sale.customer = customer
+            selected_customer = customer
         else:
             # Keep accepting requests from older clients that send only customer_name.
             name = request.form.get('customer_name', '').strip()
             if name:
-                customer = Customer.query.filter(func.lower(Customer.name) == name.lower()).first()
+                customer = Customer.query.filter(
+                    Customer.owner_id == g.creator.id,
+                    func.lower(Customer.name) == name.lower(),
+                ).first()
                 if not customer:
                     customer = Customer(owner_id=g.creator.id, name=name)
                     db.session.add(customer)
                     db.session.flush()
-                sale.customer = customer
-            else:
-                sale.customer_id = None
+                selected_customer = customer
         platform_id = request.form.get('platform_id') or None
         payment_method_id = request.form.get('payment_method_id') or None
         platform = Platform.query.filter_by(id=platform_id, owner_id=g.creator.id, active=True).first() if platform_id else None
@@ -1807,9 +1811,7 @@ def _sale_form(sale):
             db.session.rollback()
             flash('Choose an active platform and payment method from your account.', 'error')
             return redirect(request.path)
-        sale.platform_id=platform.id if platform else None; sale.payment_method_id=payment.id if payment else None; sale.payment_detail=request.form.get('payment_detail'); sale.notes=request.form.get('notes')
-        if sale.id: SaleItem.query.filter_by(sale_id=sale.id).delete()
-        db.session.flush(); total=Decimal('0')
+        total=Decimal('0')
         pids=request.form.getlist('product_id'); bids=request.form.getlist('bundle_id'); qtys=request.form.getlist('quantity'); prices=request.form.getlist('unit_price'); hours=request.form.getlist('labor_hours')
         for i,pid in enumerate(pids):
             if not pid: continue
@@ -1859,6 +1861,16 @@ def _sale_form(sale):
                 quantity_factor = q if a.price_mode == 'per_quantity' else Decimal('1')
                 total += aq*a.price*quantity_factor
             total += q*price
+        sale.sale_date = sale_date
+        sale.due_date = due_date
+        sale.sale_category = sale_category
+        sale.status = status
+        sale.paid = paid
+        sale.customer = selected_customer
+        sale.platform_id = platform.id if platform else None
+        sale.payment_method_id = payment.id if payment else None
+        sale.payment_detail = request.form.get('payment_detail')
+        sale.notes = request.form.get('notes')
         sale.total_amount = total
         db.session.commit()
         if is_new_sale:
