@@ -18,6 +18,7 @@
                 <label>Name<input name="name" maxlength="160" value="{{board.name}}" required></label>
                 <label>Score label<input name="score_label" maxlength="80" value="{{board.score_label}}" required></label>
                 <label class="leaderboard-wide">Description<textarea name="description" rows="2">{{board.description or ''}}</textarea></label>
+                {% include 'leaderboards/_automation_fields.html' %}
                 <label class="leaderboard-rank-field">Rank by
                     <select name="sort_order">
                         <option value="desc" {{'selected' if board.sort_order == 'desc' else ''}}>Highest score first</option>
@@ -32,6 +33,7 @@
             <div class="actions"><button class="button">Save Settings</button></div>
         </form>
     </section>
+    {% if not board.is_automatic %}
     <section class="panel">
         <h2>Add a customer</h2>
         {% if customers %}
@@ -56,18 +58,25 @@
         <p class="muted">All existing customers are already on this leaderboard, or no customers have been created yet.</p>
         {% endif %}
     </section>
+    {% else %}
+    <section class="panel">
+        <h2>Live automatic rankings</h2>
+        <p class="muted">This leaderboard updates from current seller sales and service subscription records. Manual score editing is disabled while Automatic Template is selected.</p>
+    </section>
+    {% endif %}
 </div>
 <section class="panel">
     <h2>Standings</h2>
     <div class="table-scroll">
         <table>
-            <thead><tr><th>Rank</th><th>Customer</th><th>{{board.score_label}}</th><th>Update score</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Rank</th><th>Customer</th><th>{{board.score_label}}</th>{% if not board.is_automatic %}<th>Update score</th><th>Actions</th>{% endif %}</tr></thead>
             <tbody>
                 {% for entry in entries %}
                 <tr>
                     <td>{{loop.index}}</td>
                     <td><strong>{{entry.customer.name}}</strong>{% if entry.customer.username or entry.customer.email %}<div class="muted">{{entry.customer.username or entry.customer.email}}</div>{% endif %}</td>
-                    <td>{{'%.2f'|format(entry.score)}}</td>
+                    <td>{% if board.is_automatic and board.auto_metric == 'amount_spent' %}{{money(entry.score)}}{% elif board.is_automatic and board.auto_metric == 'longest_subscriber' %}{{entry.score|int}} days{% else %}{{'%.2f'|format(entry.score)}}{% endif %}</td>
+                    {% if not board.is_automatic %}
                     <td>
                         <form class="leaderboard-score-form" method="post" action="{{url_for('leaderboard_entry_score', id=board.id, entry_id=entry.id)}}">
                             <input type="hidden" name="version_id" value="{{entry.version_id}}">
@@ -87,9 +96,10 @@
                             <button class="button secondary danger">Remove</button>
                         </form>
                     </td>
+                    {% endif %}
                 </tr>
                 {% else %}
-                <tr><td colspan="5">No customers on this leaderboard yet.</td></tr>
+                <tr><td colspan="{{3 if board.is_automatic else 5}}">No customers match this leaderboard yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

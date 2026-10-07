@@ -4,6 +4,7 @@
 <section class="public-seller-heading">
     <p class="public-kicker">Buyer account</p>
     <h1>Welcome, {{buyer.display_name or buyer.username}}</h1>
+    {% if buyer.first_name or buyer.last_name %}<p>{{buyer.first_name or ''}} {{buyer.last_name or ''}}</p>{% endif %}
     <p>@{{buyer.username}} · {{buyer.email}} · {{buyer.contact_number}}</p>
 </section>
 <section class="public-section">

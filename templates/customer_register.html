@@ -8,6 +8,8 @@
     <form method="post" class="form">
         <input type="hidden" name="next" value="{{next}}">
         <label>Display name (optional)<input name="display_name" maxlength="160" autocomplete="name"></label>
+        <label>First name (optional)<input name="first_name" maxlength="80" autocomplete="given-name"></label>
+        <label>Last name (optional)<input name="last_name" maxlength="80" autocomplete="family-name"></label>
         <label>Username<input name="username" maxlength="40" autocomplete="username" autocapitalize="none" required></label>
         <label>Email<input type="email" name="email" autocomplete="email" required></label>
         <label>Contact number<input type="tel" name="contact_number" maxlength="40" autocomplete="tel" required></label>

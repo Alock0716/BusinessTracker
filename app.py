@@ -10,6 +10,7 @@ import re
 import smtplib
 import ssl
 from io import BytesIO
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 import stripe
 from flask import Flask, abort, g, has_request_context, render_template, request, redirect, send_file, url_for, flash, session
@@ -282,6 +283,8 @@ def store_customer_register():
     next_url = request.form.get('next', '') if request.method == 'POST' else request.args.get('next', '')
     if request.method == 'POST':
         display_name = request.form.get('display_name', '').strip()
+        first_name = request.form.get('first_name', '').strip()[:80] or None
+        last_name = request.form.get('last_name', '').strip()[:80] or None
         username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         contact_number = request.form.get('contact_number', '').strip()
@@ -304,6 +307,7 @@ def store_customer_register():
         else:
             buyer = StoreCustomer(
                 display_name=display_name[:160] or username,
+                first_name=first_name, last_name=last_name,
                 username=username, email=email, contact_number=contact_number[:40],
                 password_hash=generate_password_hash(password),
             )
@@ -727,6 +731,10 @@ with app.app_context():
     }
     if 'username' not in store_customer_columns:
         db.session.execute(text('ALTER TABLE store_customer ADD COLUMN username VARCHAR(40)'))
+    if 'first_name' not in store_customer_columns:
+        db.session.execute(text('ALTER TABLE store_customer ADD COLUMN first_name VARCHAR(80)'))
+    if 'last_name' not in store_customer_columns:
+        db.session.execute(text('ALTER TABLE store_customer ADD COLUMN last_name VARCHAR(80)'))
     if 'contact_number' not in store_customer_columns:
         db.session.execute(text('ALTER TABLE store_customer ADD COLUMN contact_number VARCHAR(40)'))
     db.session.commit()
@@ -860,6 +868,21 @@ with app.app_context():
         if 'is_public' not in columns:
             db.session.execute(text(
                 f'ALTER TABLE {table_name} ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT TRUE'
+            ))
+    leaderboard_columns = {
+        column['name'] for column in inspect(db.engine).get_columns('leaderboard')
+    }
+    leaderboard_migrations = {
+        'is_automatic': 'BOOLEAN NOT NULL DEFAULT FALSE',
+        'auto_metric': 'VARCHAR(40)',
+        'auto_start_date': 'DATE',
+        'auto_end_date': 'DATE',
+        'auto_product_ids': "TEXT NOT NULL DEFAULT '[]'",
+    }
+    for column_name, definition in leaderboard_migrations.items():
+        if column_name not in leaderboard_columns:
+            db.session.execute(text(
+                f'ALTER TABLE leaderboard ADD COLUMN {column_name} {definition}'
             ))
     product_columns = {column['name'] for column in inspect(db.engine).get_columns('product')}
     product_migrations = {
@@ -1184,6 +1207,171 @@ def _leaderboard_score(value):
         return score.quantize(Decimal('0.01'))
     except (InvalidOperation, ValueError, TypeError):
         return None
+
+AUTO_LEADERBOARD_METRICS = {
+    'purchase_frequency': 'Purchase frequency (orders)',
+    'amount_spent': 'Amount spent',
+    'longest_subscriber': 'Longest subscriber (days)',
+}
+
+def _leaderboard_auto_config(owner_id, form):
+    if form.get('leaderboard_type', 'manual') != 'automatic':
+        return {
+            'is_automatic': False, 'auto_metric': None,
+            'auto_start_date': None, 'auto_end_date': None, 'auto_product_ids': '[]',
+        }
+    metric = form.get('auto_metric', '')
+    if metric not in AUTO_LEADERBOARD_METRICS:
+        raise ValueError('Choose a valid automatic leaderboard template.')
+    start_value = form.get('auto_start_date', '').strip()
+    end_value = form.get('auto_end_date', '').strip()
+    if bool(start_value) != bool(end_value):
+        raise ValueError('Enter both timeframe dates or leave both blank for all time.')
+    try:
+        start_date = date.fromisoformat(start_value) if start_value else None
+        end_date = date.fromisoformat(end_value) if end_value else None
+    except ValueError as error:
+        raise ValueError('Enter valid timeframe dates.') from error
+    if start_date and end_date < start_date:
+        raise ValueError('The timeframe end date must be on or after its start date.')
+    product_ids = []
+    if form.get('auto_all_products') != '1':
+        try:
+            product_ids = list(dict.fromkeys(int(value) for value in form.getlist('auto_product_ids')))
+        except (TypeError, ValueError) as error:
+            raise ValueError('Choose valid products for the leaderboard.') from error
+        if not product_ids:
+            raise ValueError('Choose at least one product or select all products.')
+        products_query = Product.query.filter(
+            Product.owner_id == owner_id, Product.id.in_(product_ids),
+        )
+        if metric == 'longest_subscriber':
+            products_query = products_query.join(Category).filter(
+                Category.owner_id == owner_id, func.lower(Category.name) == 'subscriptions',
+            )
+        if products_query.count() != len(product_ids):
+            raise ValueError('One or more selected products are unavailable for this leaderboard.')
+    return {
+        'is_automatic': True, 'auto_metric': metric,
+        'auto_start_date': start_date, 'auto_end_date': end_date,
+        'auto_product_ids': json.dumps(product_ids),
+    }
+
+def _automatic_leaderboard_entries(board, owner_id, limit=100):
+    try:
+        product_ids = [int(value) for value in json.loads(board.auto_product_ids or '[]')]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        product_ids = []
+    if board.auto_metric == 'longest_subscriber':
+        first_started = func.min(ServiceSubscription.started_at)
+        query = db.session.query(Customer, first_started.label('first_started')).join(
+            ServiceSubscription, ServiceSubscription.customer_id == Customer.id
+        ).join(Product, Product.id == ServiceSubscription.product_id).join(
+            Category, Category.id == Product.category_id
+        ).filter(
+            Customer.owner_id == owner_id,
+            ServiceSubscription.owner_id == owner_id,
+            ServiceSubscription.status == 'active',
+            Product.owner_id == owner_id,
+            Category.owner_id == owner_id,
+            func.lower(Category.name) == 'subscriptions',
+        )
+        if product_ids:
+            query = query.filter(ServiceSubscription.product_id.in_(product_ids))
+        if board.auto_start_date:
+            query = query.filter(ServiceSubscription.started_at >= board.auto_start_date)
+        if board.auto_end_date:
+            query = query.filter(ServiceSubscription.started_at <= board.auto_end_date)
+        start_order = first_started.asc() if board.sort_order == 'desc' else first_started.desc()
+        rows = query.group_by(Customer.id).order_by(
+            start_order, func.lower(Customer.name),
+        ).limit(limit).all()
+        return [SimpleNamespace(
+            customer=customer,
+            score=max((date.today() - started_at).days, 0),
+            use_username=False, id=None, version_id=None,
+        ) for customer, started_at in rows]
+
+    if board.auto_metric not in {'purchase_frequency', 'amount_spent'}:
+        return []
+    query = db.session.query(Customer).join(
+        Sale, Sale.customer_id == Customer.id
+    ).join(SaleItem, SaleItem.sale_id == Sale.id).join(
+        Product, Product.id == SaleItem.product_id
+    ).filter(
+        Customer.owner_id == owner_id,
+        Sale.owner_id == owner_id,
+        Sale.paid.is_(True),
+        Sale.status != 'Canceled',
+        Product.owner_id == owner_id,
+    )
+    if board.auto_metric == 'purchase_frequency':
+        score = func.count(func.distinct(Sale.id))
+    else:
+        addon_factor = case(
+            (SaleItemAddon.price_mode == 'per_quantity', SaleItem.quantity), else_=1,
+        )
+        addon_totals = db.session.query(
+            SaleItemAddon.sale_item_id.label('sale_item_id'),
+            func.sum(SaleItemAddon.quantity * SaleItemAddon.unit_price * addon_factor).label('total'),
+        ).join(SaleItem, SaleItem.id == SaleItemAddon.sale_item_id).group_by(
+            SaleItemAddon.sale_item_id
+        ).subquery()
+        query = query.outerjoin(addon_totals, addon_totals.c.sale_item_id == SaleItem.id)
+        score = func.sum(
+            SaleItem.quantity * SaleItem.unit_price + func.coalesce(addon_totals.c.total, 0)
+        )
+    query = query.add_columns(score.label('score'))
+    if product_ids:
+        query = query.filter(Product.id.in_(product_ids))
+    if board.auto_start_date:
+        query = query.filter(Sale.sale_date >= datetime.combine(board.auto_start_date, datetime.min.time()))
+    if board.auto_end_date:
+        query = query.filter(Sale.sale_date <= datetime.combine(board.auto_end_date, datetime.max.time()))
+    score_order = score.desc() if board.sort_order == 'desc' else score.asc()
+    rows = query.group_by(Customer.id).order_by(
+        score_order, func.lower(Customer.name),
+    ).limit(limit).all()
+    return [SimpleNamespace(
+        customer=customer, score=value or 0, use_username=False, id=None, version_id=None,
+    ) for customer, value in rows]
+
+def _leaderboard_entries(board, owner_id, limit=None):
+    if board.is_automatic:
+        return _automatic_leaderboard_entries(board, owner_id, limit=limit or 100)
+    score_order = LeaderboardEntry.score.desc() if board.sort_order == 'desc' else LeaderboardEntry.score.asc()
+    query = db.session.query(LeaderboardEntry).join(Customer).filter(
+        LeaderboardEntry.leaderboard_id == board.id, Customer.owner_id == owner_id,
+    ).order_by(score_order, func.lower(Customer.name), LeaderboardEntry.id)
+    return query.limit(limit).all() if limit else query.all()
+
+def _leaderboard_top_entries(board_rows):
+    boards = [row[0] for row in board_rows]
+    top_entries = {}
+    manual_ids = [board.id for board in boards if not board.is_automatic]
+    if manual_ids:
+        rank_score = case(
+            (Leaderboard.sort_order == 'asc', -LeaderboardEntry.score),
+            else_=LeaderboardEntry.score,
+        )
+        rows = db.session.query(LeaderboardEntry, Customer).join(
+            Customer, Customer.id == LeaderboardEntry.customer_id
+        ).join(Leaderboard, Leaderboard.id == LeaderboardEntry.leaderboard_id).filter(
+            Leaderboard.id.in_(manual_ids), Customer.owner_id == Leaderboard.owner_id,
+        ).order_by(
+            LeaderboardEntry.leaderboard_id, rank_score.desc(),
+            func.lower(Customer.name), LeaderboardEntry.id,
+        ).all()
+        for entry, customer in rows:
+            top_entries.setdefault(entry.leaderboard_id, SimpleNamespace(
+                customer=customer, score=entry.score, use_username=entry.use_username,
+            ))
+    for board in boards:
+        if board.is_automatic:
+            entries = _automatic_leaderboard_entries(board, board.owner_id, limit=1)
+            if entries:
+                top_entries[board.id] = entries[0]
+    return top_entries
 
 @app.context_processor
 def helpers():
@@ -1564,9 +1752,11 @@ def storefront():
         boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(30).all()
         if query else []
     )
+    board_top_entries = _leaderboard_top_entries(board_results[:5])
     return render_template(
         'storefront/index.html', query=query, sellers=sellers, available_sellers=available_sellers,
         product_results=product_results, board_results=board_results,
+        board_top_entries=board_top_entries,
     )
 
 @app.route('/sellers/<username>')
@@ -1586,13 +1776,13 @@ def seller_store(username):
     ).filter(Leaderboard.owner_id == seller.id, Leaderboard.is_public.is_(True)).group_by(Leaderboard.id).order_by(
         func.count(LeaderboardEntry.id).desc(), Leaderboard.name
     ).limit(3).all()
+    top_entries = _leaderboard_top_entries(board_rows)
     boards = []
     for board, entry_count in board_rows:
-        score_order = LeaderboardEntry.score.desc() if board.sort_order == 'desc' else LeaderboardEntry.score.asc()
-        top_entry = db.session.query(LeaderboardEntry).join(Customer).filter(
-            LeaderboardEntry.leaderboard_id == board.id, Customer.owner_id == seller.id
-        ).order_by(score_order, LeaderboardEntry.id).first()
-        boards.append({'board': board, 'entry_count': entry_count, 'top_entry': top_entry})
+        boards.append({
+            'board': board, 'entry_count': entry_count,
+            'top_entry': top_entries.get(board.id),
+        })
     return render_template('storefront/seller.html', seller=seller, products=products, boards=boards)
 
 @app.route('/sellers/<username>/products/<int:product_id>/checkout', methods=['POST'])
@@ -1914,7 +2104,8 @@ def public_leaderboards():
         boards_query = boards_query.filter(func.lower(CreatorAccount.username) == seller_username.lower())
     boards = boards_query.order_by(CreatorAccount.username, Leaderboard.name).limit(60).all()
     return render_template(
-        'storefront/boards.html', query=query, seller_username=seller_username, boards=boards
+        'storefront/boards.html', query=query, seller_username=seller_username,
+        boards=boards, top_entries=_leaderboard_top_entries(boards),
     )
 
 @app.route('/sellers/<username>/leaderboards/<int:id>')
@@ -1924,10 +2115,7 @@ def public_leaderboard(username, id):
         _seller_subscription_access(),
     ).first_or_404()
     board = Leaderboard.query.filter_by(id=id, owner_id=seller.id, is_public=True).first_or_404()
-    score_order = LeaderboardEntry.score.desc() if board.sort_order == 'desc' else LeaderboardEntry.score.asc()
-    entries = db.session.query(LeaderboardEntry).join(Customer).filter(
-        LeaderboardEntry.leaderboard_id == board.id, Customer.owner_id == seller.id
-    ).order_by(score_order, LeaderboardEntry.id).all()
+    entries = _leaderboard_entries(board, seller.id)
     return render_template(
         'storefront/leaderboard.html', seller=seller, board=board, entries=entries
     )
@@ -2564,8 +2752,12 @@ def leaderboards():
     pagination = boards_query.paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
+    products = Product.query.options(joinedload(Product.category)).filter_by(
+        owner_id=g.creator.id,
+    ).order_by(Product.name).all()
     return render_template(
         'leaderboards/list.html', leaderboards=pagination.items, pagination=pagination,
+        top_entries=_leaderboard_top_entries(pagination.items), products=products,
         previous_url=url_for('leaderboards', page=pagination.prev_num) if pagination.has_prev else None,
         next_url=url_for('leaderboards', page=pagination.next_num) if pagination.has_next else None,
     )
@@ -2580,12 +2772,20 @@ def leaderboard_new():
         return redirect(url_for('leaderboards'))
     if sort_order not in {'asc', 'desc'}:
         sort_order = 'desc'
+    try:
+        auto_config = _leaderboard_auto_config(g.creator.id, request.form)
+    except ValueError as error:
+        flash(str(error), 'error')
+        return redirect(url_for('leaderboards'))
+    if auto_config['is_automatic'] and score_label == 'Score':
+        score_label = AUTO_LEADERBOARD_METRICS[auto_config['auto_metric']]
     board = Leaderboard(
         owner_id=g.creator.id,
         name=name,
         description=request.form.get('description', '').strip() or None,
         score_label=score_label,
         sort_order=sort_order,
+        **auto_config,
         is_public=request.form.get('is_public', '1') == '1',
     )
     db.session.add(board)
@@ -2596,40 +2796,59 @@ def leaderboard_new():
 @app.route('/leaderboards/<int:id>')
 def leaderboard_detail(id):
     board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
-    score_order = LeaderboardEntry.score.desc() if board.sort_order == 'desc' else LeaderboardEntry.score.asc()
-    entries = db.session.query(LeaderboardEntry).join(Customer).filter(
-        LeaderboardEntry.leaderboard_id == board.id, Customer.owner_id == g.creator.id
-    ).order_by(score_order, func.lower(Customer.name)).all()
-    existing_customer_ids = {entry.customer_id for entry in entries}
-    customers = Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
-    customers = [customer for customer in customers if customer.id not in existing_customer_ids]
+    entries = _leaderboard_entries(board, g.creator.id)
+    existing_customer_ids = {entry.customer_id for entry in entries} if not board.is_automatic else set()
+    customers = []
+    if not board.is_automatic:
+        customers = Customer.query.filter_by(owner_id=g.creator.id).order_by(Customer.name).all()
+        customers = [customer for customer in customers if customer.id not in existing_customer_ids]
+    products = Product.query.options(joinedload(Product.category)).filter_by(
+        owner_id=g.creator.id,
+    ).order_by(Product.name).all()
+    try:
+        auto_product_ids = [int(value) for value in json.loads(board.auto_product_ids or '[]')]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        auto_product_ids = []
     return render_template(
-        'leaderboards/detail.html', board=board, entries=entries, customers=customers
+        'leaderboards/detail.html', board=board, entries=entries, customers=customers,
+        products=products, auto_product_ids=auto_product_ids,
     )
 
 @app.route('/leaderboards/<int:id>/settings', methods=['POST'])
 def leaderboard_settings(id):
-    board = Leaderboard.query.get_or_404(id)
+    board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
     if not _form_version_matches(board):
         return redirect(url_for('leaderboard_detail', id=board.id))
     name = request.form.get('name', '').strip()
     score_label = request.form.get('score_label', '').strip()
     sort_order = request.form.get('sort_order', '')
-    if not name or not score_label or sort_order not in {'asc', 'desc'}:
+    if not name or sort_order not in {'asc', 'desc'}:
         flash('Enter a name and score label, and choose a valid ranking order.', 'error')
     else:
-        board.name = name
-        board.description = request.form.get('description', '').strip() or None
-        board.score_label = score_label
-        board.sort_order = sort_order
-        board.is_public = request.form.get('is_public') == '1'
-        db.session.commit()
-        flash('Leaderboard settings saved.', 'success')
+        try:
+            auto_config = _leaderboard_auto_config(g.creator.id, request.form)
+        except ValueError as error:
+            flash(str(error), 'error')
+        else:
+            if auto_config['is_automatic'] and score_label in {'', 'Score'}:
+                score_label = AUTO_LEADERBOARD_METRICS[auto_config['auto_metric']]
+            board.name = name
+            board.description = request.form.get('description', '').strip() or None
+            board.score_label = score_label or 'Score'
+            board.sort_order = sort_order
+            board.is_public = request.form.get('is_public') == '1'
+            for field, value in auto_config.items():
+                setattr(board, field, value)
+            db.session.commit()
+            flash('Leaderboard settings saved.', 'success')
     return redirect(url_for('leaderboard_detail', id=board.id))
 
 @app.route('/leaderboards/<int:id>/entries', methods=['POST'])
 def leaderboard_entry_add(id):
-    board = Leaderboard.query.get_or_404(id)
+    board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
+    if board.is_automatic:
+        flash('Automatic leaderboard scores update from purchases and subscriptions.', 'error')
+        return redirect(url_for('leaderboard_detail', id=board.id))
     customer_id = request.form.get('customer_id', type=int)
     score = _leaderboard_score(request.form.get('score', ''))
     use_username = request.form.get('use_username') == '1'
@@ -2650,7 +2869,10 @@ def leaderboard_entry_add(id):
 
 @app.route('/leaderboards/<int:id>/entries/<int:entry_id>/score', methods=['POST'])
 def leaderboard_entry_score(id, entry_id):
-    board = Leaderboard.query.get_or_404(id)
+    board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
+    if board.is_automatic:
+        flash('Automatic leaderboard scores cannot be edited manually.', 'error')
+        return redirect(url_for('leaderboard_detail', id=board.id))
     entry = LeaderboardEntry.query.filter_by(id=entry_id, leaderboard_id=board.id).first_or_404()
     if not _form_version_matches(entry):
         return redirect(url_for('leaderboard_detail', id=board.id))
@@ -2669,7 +2891,10 @@ def leaderboard_entry_score(id, entry_id):
 
 @app.route('/leaderboards/<int:id>/entries/<int:entry_id>/remove', methods=['POST'])
 def leaderboard_entry_remove(id, entry_id):
-    board = Leaderboard.query.get_or_404(id)
+    board = Leaderboard.query.filter_by(id=id, owner_id=g.creator.id).first_or_404()
+    if board.is_automatic:
+        flash('Automatic leaderboard entries cannot be removed manually.', 'error')
+        return redirect(url_for('leaderboard_detail', id=board.id))
     entry = LeaderboardEntry.query.filter_by(id=entry_id, leaderboard_id=board.id).first_or_404()
     if not _form_version_matches(entry):
         return redirect(url_for('leaderboard_detail', id=board.id))

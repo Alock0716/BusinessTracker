@@ -1496,6 +1496,30 @@ nav a:hover {
 .leaderboard-wide {
   grid-column: 1 / -1;
 }
+.auto-leaderboard-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  min-width: 0;
+  padding: 12px;
+  background: #f7faf8;
+  border: 1px solid #d5ded9;
+  border-radius: 6px;
+}
+.auto-leaderboard-fields[hidden] { display: none; }
+.auto-leaderboard-fields > label,
+.auto-leaderboard-fields > p { min-width: 0; margin: 0; }
+.auto-template-help,
+.auto-all-products-label,
+.auto-products-label { grid-column: 1 / -1; }
+.leaderboard-timeframe-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.auto-products-label select {
+  min-height: 130px;
+}
 .leaderboard-fields > label.leaderboard-visibility {
   display: flex;
   align-items: center;

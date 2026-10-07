@@ -37,7 +37,7 @@
         {% for item in boards %}
         <a class="public-board-row" href="{{url_for('public_leaderboard', username=seller.username, id=item.board.id)}}">
             <span class="public-board-rank">{{'%02d'|format(loop.index)}}</span>
-            <span class="public-board-copy"><strong>{{item.board.name}}</strong><small>{{item.entry_count}} participant{{'' if item.entry_count == 1 else 's'}} · {{item.board.score_label}}</small></span>
+            <span class="public-board-copy"><strong>{{item.board.name}}</strong><small>{{'Automatic rankings' if item.board.is_automatic else item.entry_count ~ ' participant' ~ ('' if item.entry_count == 1 else 's')}} · {{item.board.score_label}}</small></span>
             {% if item.top_entry %}<span class="public-board-leader"><small>LEADER</small><strong>{{item.top_entry.customer.username if item.top_entry.use_username and item.top_entry.customer.username else ('Anonymous' if item.top_entry.use_username else item.top_entry.customer.name)}}</strong><span>{{'%.2f'|format(item.top_entry.score)}}</span></span>{% endif %}
             <span class="public-list-arrow" aria-hidden="true">›</span>
         </a>

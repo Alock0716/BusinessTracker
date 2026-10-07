@@ -47,8 +47,15 @@ python app.py
 - Stripe dashboard checklist: activate the platform account and complete business verification; while in test mode, create a recurring monthly Seller Access product/Price; configure the customer portal to allow payment-method updates, invoice viewing, and cancellation; then add the webhook endpoint and select the events above. Use the platform account's secret key, not a seller's Connect key and not a `pk_...` publishable key.
 - To use Connect payouts, also enable Stripe Connect on the platform account and complete a separate Express onboarding for each seller. Platform subscriptions pay the platform; menu purchases continue to route to sellers through Connect.
 - Approve a seller account, set a real seller email, and use its Subscription page to start checkout. Use Stripe's test card `4242 4242 4242 4242` with any future expiration and CVC. To go live, create a live-mode Price, live API key, and production webhook secret, then update deployment environment variables.
-- Public checkout works without a buyer account. Optional buyer accounts at `/customer/register` save purchase history across sellers.
+- Public purchases require a buyer account at `/customer/register`, including username, email, and contact number. Display name, first name, and last name are optional; the username is used publicly when no display name is given.
 - Checkout uses Stripe Connect destination charges and does not add a platform fee. Test mode can be used with Stripe test keys before enabling live payments.
+
+## Manual and automatic leaderboards
+
+- Manual scoreboards remain the default and keep seller-entered scores unchanged.
+- Automatic templates can rank customers by paid purchase order frequency, amount spent on selected products (including their add-ons), or longest active service-subscription tenure.
+- Sellers can choose all products/services or a group, and an inclusive start/end date range. Leaving both dates blank uses all available history.
+- Automatic boards recalculate from seller-owned sales and service subscriptions when viewed. The longest-subscriber template uses active services in the seller's `Subscriptions` category.
 
 ## Included
 

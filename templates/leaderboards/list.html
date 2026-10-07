@@ -10,6 +10,7 @@
                 <label>Name<input name="name" maxlength="160" required></label>
                 <label>Score label<input name="score_label" maxlength="80" value="Score" required></label>
                 <label class="leaderboard-wide">Description<textarea name="description" rows="2"></textarea></label>
+                {% include 'leaderboards/_automation_fields.html' %}
                 <label class="leaderboard-rank-field">Rank by
                     <select name="sort_order">
                         <option value="desc">Highest score first</option>
@@ -28,18 +29,20 @@
         <h2>Your leaderboards</h2>
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Leaderboard</th><th>Participants</th><th>Score</th><th>Ranking</th><th>Visibility</th></tr></thead>
+                <thead><tr><th>Leaderboard</th><th>Participants</th><th>Top customer</th><th>Score</th><th>Ranking</th><th>Visibility</th></tr></thead>
                 <tbody>
                     {% for board, entry_count in leaderboards %}
                     <tr>
                         <td><a href="{{url_for('leaderboard_detail', id=board.id)}}"><strong>{{board.name}}</strong></a>{% if board.description %}<div class="muted">{{board.description}}</div>{% endif %}</td>
-                        <td>{{entry_count}}</td>
+                        <td>{{'Automatic' if board.is_automatic else entry_count}}</td>
+                        {% set top_entry = top_entries.get(board.id) %}
+                        <td>{% if top_entry %}{{top_entry.customer.username if top_entry.use_username and top_entry.customer.username else top_entry.customer.name}}{% if board.is_automatic and board.auto_metric == 'amount_spent' %}<small>{{money(top_entry.score)}}</small>{% elif board.is_automatic and board.auto_metric == 'longest_subscriber' %}<small>{{top_entry.score|int}} days</small>{% else %}<small>{{'%.2f'|format(top_entry.score)}}</small>{% endif %}{% else %}—{% endif %}</td>
                         <td>{{board.score_label}}</td>
                         <td>{{'Highest first' if board.sort_order == 'desc' else 'Lowest first'}}</td>
                         <td><span class="visibility-badge {{'is-public' if board.is_public else 'is-private'}}">{{'Public' if board.is_public else 'Private'}}</span></td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5">No leaderboards yet.</td></tr>
+                    <tr><td colspan="6">No leaderboards yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

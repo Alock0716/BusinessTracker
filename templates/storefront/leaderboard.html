@@ -20,7 +20,7 @@
             <tbody>
                 {% for entry in entries %}
                 {% set display_name = entry.customer.username if entry.use_username and entry.customer.username else ('Anonymous' if entry.use_username else entry.customer.name) %}
-                <tr data-standing-name="{{display_name|lower}}"><td>{{loop.index}}</td><td><strong>{{display_name}}</strong></td><td>{{'%.2f'|format(entry.score)}}</td></tr>
+                <tr data-standing-name="{{display_name|lower}}"><td>{{loop.index}}</td><td><strong>{{display_name}}</strong></td><td>{% if board.is_automatic and board.auto_metric == 'amount_spent' %}{{money(entry.score)}}{% elif board.is_automatic and board.auto_metric == 'longest_subscriber' %}{{entry.score|int}} days{% else %}{{'%.2f'|format(entry.score)}}{% endif %}</td></tr>
                 {% else %}<tr><td colspan="3">No scores have been added yet.</td></tr>{% endfor %}
                 <tr id="standing-no-match" hidden><td colspan="3">No displayed names match your search.</td></tr>
             </tbody>

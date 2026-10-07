@@ -1,0 +1,50 @@
+{% set automatic_mode = board is defined and board and board.is_automatic %}
+{% set selected_products = auto_product_ids|default([]) %}
+<label class="leaderboard-wide">Leaderboard type
+    <select name="leaderboard_type" class="leaderboard-type-control">
+        <option value="manual" {{'selected' if not automatic_mode else ''}}>Manual scores</option>
+        <option value="automatic" {{'selected' if automatic_mode else ''}}>Automatic template</option>
+    </select>
+</label>
+<div class="leaderboard-wide auto-leaderboard-fields" {% if not automatic_mode %}hidden{% endif %}>
+    <label>Automatic template
+        <select name="auto_metric" class="auto-leaderboard-metric">
+            <option value="purchase_frequency" {{'selected' if board and board.auto_metric == 'purchase_frequency' else ''}}>Most purchase orders</option>
+            <option value="amount_spent" {{'selected' if board and board.auto_metric == 'amount_spent' else ''}}>Most money spent</option>
+            <option value="longest_subscriber" {{'selected' if board and board.auto_metric == 'longest_subscriber' else ''}}>Longest active subscriber</option>
+        </select>
+    </label>
+    <p class="muted auto-template-help">Purchase rankings include paid, non-canceled orders. Subscriber tenure uses active subscriptions from the Subscriptions category. Dates are inclusive; leave both blank for all time.</p>
+    <div class="leaderboard-timeframe-fields">
+        <label>From<input type="date" name="auto_start_date" value="{{board.auto_start_date.isoformat() if board and board.auto_start_date else ''}}"></label>
+        <label>Through<input type="date" name="auto_end_date" value="{{board.auto_end_date.isoformat() if board and board.auto_end_date else ''}}"></label>
+    </div>
+    <label class="leaderboard-visibility auto-all-products-label">
+        <input type="checkbox" name="auto_all_products" value="1" class="auto-all-products-toggle" {% if not selected_products %}checked{% endif %}>
+        <span><strong>All relevant products and services</strong><small>Otherwise choose one or more below.</small></span>
+    </label>
+    <label class="auto-products-label">Products / services
+        <select name="auto_product_ids" class="auto-product-select" multiple size="6" {% if not selected_products %}disabled{% endif %}>
+            {% for product in products %}
+            <option value="{{product.id}}" data-subscription="{{'1' if product.category and product.category.name|lower == 'subscriptions' else '0'}}" {{'selected' if product.id in selected_products else ''}}>{{product.name}}{% if product.category %} · {{product.category.name}}{% endif %}{{' (inactive)' if not product.active else ''}}</option>
+            {% endfor %}
+        </select>
+    </label>
+</div>
+<script>
+document.querySelectorAll('.leaderboard-type-control').forEach((typeSelect) => {
+    const form = typeSelect.form;
+    const fields = form.querySelector('.auto-leaderboard-fields');
+    const allProducts = form.querySelector('.auto-all-products-toggle');
+    const productSelect = form.querySelector('.auto-product-select');
+    const sync = () => {
+        const automatic = typeSelect.value === 'automatic';
+        fields.hidden = !automatic;
+        allProducts.disabled = !automatic;
+        productSelect.disabled = !automatic || allProducts.checked;
+    };
+    typeSelect.addEventListener('change', sync);
+    allProducts.addEventListener('change', sync);
+    sync();
+});
+</script>
