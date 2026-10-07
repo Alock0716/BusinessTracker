@@ -38,7 +38,7 @@
                     <td>{{subscription.current_period_end.strftime('%b %d, %Y')}}</td>
                     <td><span class="subscription-status-badge {{'status-overdue' if is_overdue else 'status-' ~ subscription.status}}">{{'Overdue' if is_overdue else subscription.status|capitalize}}</span>{% if inactive_before_end %}<small class="subscription-date-warning">Inactive before end date</small>{% endif %}</td>
                     <td class="subscription-notes-cell">{{subscription.notes or '—'}}</td>
-                    <td><a class="button secondary" href="{{url_for('service_subscription_update', id=subscription.id)}}">Edit</a></td>
+                    <td><div class="sales-row-actions"><a class="button secondary" href="{{url_for('service_subscription_update', id=subscription.id)}}">Edit</a><form method="post" action="{{url_for('service_subscription_delete', id=subscription.id)}}" onsubmit="return confirm('Delete this customer subscription?')"><input type="hidden" name="version_id" value="{{subscription.version_id}}"><button class="button secondary danger">Delete</button></form></div></td>
                 </tr>
                 {% endfor %}
             </tbody>

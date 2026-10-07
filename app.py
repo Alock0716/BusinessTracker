@@ -601,6 +601,18 @@ def service_subscription_update(id):
         products=products, statuses=SERVICE_SUBSCRIPTION_STATUSES, today=date.today(),
     )
 
+@app.route('/subscriptions/<int:id>/delete', methods=['POST'])
+def service_subscription_delete(id):
+    subscription = ServiceSubscription.query.filter_by(
+        id=id, owner_id=g.creator.id,
+    ).first_or_404()
+    if not _form_version_matches(subscription):
+        return redirect(url_for('service_subscriptions'))
+    db.session.delete(subscription)
+    db.session.commit()
+    flash('Customer subscription deleted.', 'success')
+    return redirect(url_for('service_subscriptions'))
+
 TENANT_TABLES = ('category', 'platform', 'payment_method', 'customer', 'leaderboard', 'product', 'product_tag', 'sale', 'service_subscription')
 TENANT_NAME_TABLES = {
     'category': (
@@ -1077,6 +1089,7 @@ def _sales_customer_for_buyer(owner_id, email, name, username=None, contact_numb
         customer = Customer(
             owner_id=owner_id, name=(name or username or email)[:160], email=email,
             username=username, contact_number=contact_number,
+            notes='Automatically created from a Stripe sale via public menu checkout.',
         )
         db.session.add(customer)
         db.session.flush()
