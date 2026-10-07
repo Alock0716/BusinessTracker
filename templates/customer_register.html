@@ -2,10 +2,11 @@
 {% block title %}Create Buyer Account · Business Tracker{% endblock %}
 {% block content %}
 <section class="public-auth">
-    <p class="public-kicker">Optional buyer account</p>
-    <h1>Save your purchase history</h1>
-    <p class="muted">A buyer account is only for your details and receipts. You can also check out without creating one.</p>
+    <p class="public-kicker">Buyer account</p>
+    <h1>Set up your purchase account</h1>
+    <p class="muted">A buyer account with your name and email is required to purchase so sellers can contact you and fulfill orders.</p>
     <form method="post" class="form">
+        <input type="hidden" name="next" value="{{next}}">
         <label>Name<input name="display_name" maxlength="160" autocomplete="name" required></label>
         <label>Email<input type="email" name="email" autocomplete="email" required></label>
         <label>Password<input type="password" name="password" minlength="10" autocomplete="new-password" required></label>

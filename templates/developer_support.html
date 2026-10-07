@@ -1,11 +1,17 @@
 <div class="developer-support-content">
-    <p>A voluntary tip goes directly to {{developer_display_name}} through the platform's Stripe account.</p>
+    {% if developer_show_contact is not defined or developer_show_contact %}
+    <p>A voluntary tip goes directly to the developer: Solarskull0716.</p>
     {% if developer_contact_email %}
     <p><strong>Send content:</strong> <a href="mailto:{{developer_contact_email}}?subject=Business%20Tracker%20video%20or%20feedback">email {{developer_contact_email}}</a> with a video attached or a private share link.</p>
-    {% else %}<p class="muted">Contact information is not configured yet.</p>{% endif %}
+    {% endif %}
+    {% if developer_contact_number %}
+    <p><strong>Call or text:</strong> <a href="tel:{{developer_contact_tel}}">{{developer_contact_number}}</a> · <a href="sms:{{developer_contact_tel}}">Text {{developer_display_name}}</a></p>
+    {% endif %}
+    {% if not developer_contact_email and not developer_contact_number %}<p class="muted">Contact information is not configured yet.</p>{% endif %}
+    {% endif %}
     <form method="post" action="{{url_for('developer_tip_checkout')}}" class="developer-tip-form">
         <input type="hidden" name="return_to" value="{{developer_return_to|default('storefront')}}">
-        <label><strong>Send a tip (whole USD)</strong><input type="number" name="amount" min="1" max="1000" step="1" value="5" required></label>
+        <label><strong>Send An Optional Tip</strong><input type="number" name="amount" min="1" max="1000" step="1" value="5" required></label>
         <button class="button" type="submit" {% if not developer_tip_enabled %}disabled{% endif %}>Continue to Stripe</button>
         {% if not developer_tip_enabled %}<small class="muted">Tips are temporarily unavailable.</small>{% endif %}
     </form>

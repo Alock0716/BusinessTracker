@@ -3,6 +3,8 @@
 {% set active_addons = product.addons|selectattr('active')|list %}
 <details class="public-purchase-details">
     <summary>Buy this item</summary>
+    {% if product.requires_delivery %}<p class="public-delivery-note">Delivery required. Stripe will collect a shipping address and phone number.</p>{% endif %}
+    {% if current_store_customer %}
     <form method="post" action="{{url_for('public_product_checkout', username=seller.username, product_id=product.id)}}" class="public-purchase-form">
         <label>{{product.quantity_label or 'Quantity'}}<input type="number" name="quantity" min="1" max="99" step="1" value="1" required></label>
         {% if active_bundles or not product.base_price_enabled %}
@@ -28,5 +30,13 @@
         {% endfor %}
         <button class="button" type="submit">Continue to secure checkout</button>
     </form>
+    {% else %}
+    {% set return_to_menu = url_for('seller_store', username=seller.username) %}
+    <div class="purchase-account-required">
+        <p>Sign in or create a buyer account to purchase. Your name and email let the seller contact you.</p>
+        <a class="button" href="{{url_for('login', next=return_to_menu)}}">Sign in</a>
+        <a class="button secondary" href="{{url_for('store_customer_register', next=return_to_menu)}}">Create buyer account</a>
+    </div>
+    {% endif %}
 </details>
 {% endif %}

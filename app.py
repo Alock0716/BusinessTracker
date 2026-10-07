@@ -33,7 +33,7 @@ PUBLIC_ENDPOINTS = {
     'login', 'register', 'logout', 'storefront', 'public_leaderboards', 'seller_store',
     'public_leaderboard', 'store_customer_login', 'store_customer_register',
     'store_customer_logout', 'store_customer_account', 'forgot_password', 'reset_password', 'public_product_checkout',
-    'checkout_success', 'checkout_cancel', 'stripe_webhook', 'developer_tip_checkout',
+    'store_customer_tip_banner_dismiss', 'checkout_success', 'checkout_cancel', 'stripe_webhook', 'developer_tip_checkout',
     'developer_tip_return', 'static',
 }
 SALE_STATUSES = ('New', 'In Progress', 'Not Started', 'On-Hold', 'Waiting on Payment', 'Canceled', 'Completed')
@@ -177,6 +177,9 @@ def _form_version_matches(record):
         return False
     return True
 
+def _safe_local_return(value, fallback):
+    return value if value.startswith('/') and not value.startswith('//') else fallback
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('creator_id'):
@@ -204,7 +207,10 @@ def login():
         elif buyer and check_password_hash(buyer.password_hash, password):
             session.clear()
             session['store_customer_id'] = buyer.id
-            return redirect(url_for('store_customer_account'))
+            session['buyer_tip_banner_expires_at'] = (datetime.utcnow() + timedelta(seconds=120)).isoformat()
+            return redirect(_safe_local_return(
+                request.form.get('next', ''), url_for('store_customer_account')
+            ))
         else:
             flash('Invalid email or password.', 'error')
     next_url = request.form.get('next', '') if request.method == 'POST' else request.args.get('next', '')
@@ -267,6 +273,7 @@ def logout():
 def store_customer_register():
     if g.store_customer:
         return redirect(url_for('store_customer_account'))
+    next_url = request.form.get('next', '') if request.method == 'POST' else request.args.get('next', '')
     if request.method == 'POST':
         display_name = request.form.get('display_name', '').strip()
         email = request.form.get('email', '').strip().lower()
@@ -290,9 +297,10 @@ def store_customer_register():
             db.session.add(buyer)
             db.session.commit()
             session['store_customer_id'] = buyer.id
+            session['buyer_tip_banner_expires_at'] = (datetime.utcnow() + timedelta(seconds=120)).isoformat()
             flash('Buyer account created.', 'success')
-            return redirect(url_for('store_customer_account'))
-    return render_template('customer_register.html')
+            return redirect(_safe_local_return(next_url, url_for('store_customer_account')))
+    return render_template('customer_register.html', next=next_url)
 
 @app.route('/customer/login', methods=['GET', 'POST'])
 def store_customer_login():
@@ -301,6 +309,13 @@ def store_customer_login():
 @app.route('/customer/logout')
 def store_customer_logout():
     return logout()
+
+@app.route('/customer/tip-banner/dismiss', methods=['POST'])
+def store_customer_tip_banner_dismiss():
+    if g.store_customer is None:
+        abort(403)
+    session['buyer_tip_banner_dismissed'] = True
+    return redirect(url_for('storefront'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -716,6 +731,7 @@ with app.app_context():
     product_migrations = {
         'base_price_enabled': 'BOOLEAN NOT NULL DEFAULT TRUE',
         'quantity_label': "VARCHAR(40) NOT NULL DEFAULT 'Quantity'",
+        'requires_delivery': 'BOOLEAN NOT NULL DEFAULT FALSE',
     }
     for column_name, definition in product_migrations.items():
         if column_name not in product_columns:
@@ -760,6 +776,9 @@ with app.app_context():
         'status': "VARCHAR(30) NOT NULL DEFAULT 'New'",
         'paid': 'BOOLEAN NOT NULL DEFAULT FALSE',
         'store_customer_id': 'INTEGER REFERENCES store_customer(id)',
+        'delivery_name': 'VARCHAR(160)',
+        'delivery_phone': 'VARCHAR(40)',
+        'delivery_address': 'TEXT',
         'stripe_checkout_session_id': 'VARCHAR(255)',
         'stripe_payment_intent_id': 'VARCHAR(255)',
     }
@@ -968,6 +987,24 @@ def _complete_stripe_checkout(checkout):
         return False
     is_newly_paid = not sale.paid
     details = checkout.get('customer_details') or {}
+    collected_information = checkout.get('collected_information') or {}
+    shipping = checkout.get('shipping_details') or collected_information.get('shipping_details') or {}
+    shipping_address = shipping.get('address') or {}
+    if shipping_address:
+        sale.delivery_name = shipping.get('name') or sale.delivery_name
+        sale.delivery_phone = shipping.get('phone') or details.get('phone') or sale.delivery_phone
+        address_lines = [shipping_address.get('line1'), shipping_address.get('line2')]
+        locality = ', '.join(
+            value for value in (shipping_address.get('city'), shipping_address.get('state')) if value
+        )
+        postal_code = shipping_address.get('postal_code')
+        if postal_code:
+            locality = f'{locality} {postal_code}'.strip()
+        if locality:
+            address_lines.append(locality)
+        if shipping_address.get('country'):
+            address_lines.append(shipping_address['country'])
+        sale.delivery_address = '\n'.join(line for line in address_lines if line)
     email = details.get('email') or checkout.get('customer_email')
     name = details.get('name')
     if sale.store_customer:
@@ -1001,6 +1038,26 @@ def _leaderboard_score(value):
 @app.context_processor
 def helpers():
     creator = getattr(g, 'creator', None)
+    buyer = getattr(g, 'store_customer', None)
+    banner_expires_at = session.get('buyer_tip_banner_expires_at') if buyer else None
+    if buyer and not banner_expires_at and not session.get('buyer_tip_banner_dismissed'):
+        banner_expires_at = (datetime.utcnow() + timedelta(seconds=120)).isoformat()
+        session['buyer_tip_banner_expires_at'] = banner_expires_at
+    try:
+        banner_remaining_seconds = max(
+            0, (datetime.fromisoformat(banner_expires_at) - datetime.utcnow()).total_seconds()
+        ) if banner_expires_at else 0
+    except (TypeError, ValueError):
+        banner_remaining_seconds = 0
+    show_buyer_tip_banner = bool(
+        buyer and not session.get('buyer_tip_banner_dismissed') and banner_remaining_seconds > 0
+    )
+    developer_contact_number = app.config.get('DEVELOPER_CONTACT_NUMBER', '').strip()
+    developer_contact_digits = re.sub(r'\D', '', developer_contact_number)
+    developer_contact_tel = (
+        f'+{developer_contact_digits}' if developer_contact_number.startswith('+')
+        else developer_contact_digits
+    )
     unread_notifications = []
     if creator and creator.banner_notifications:
         unread_notifications = SellerNotification.query.filter_by(
@@ -1010,8 +1067,12 @@ def helpers():
         'money': lambda x: f'${money(x):,.2f}',
         'current_creator': creator,
         'current_store_customer': getattr(g, 'store_customer', None),
+        'show_buyer_tip_banner': show_buyer_tip_banner,
+        'buyer_tip_banner_remaining_ms': int(banner_remaining_seconds * 1000),
         'unread_notifications': unread_notifications,
         'developer_contact_email': app.config.get('DEVELOPER_CONTACT_EMAIL', ''),
+        'developer_contact_number': developer_contact_number,
+        'developer_contact_tel': developer_contact_tel,
         'developer_display_name': app.config.get('DEVELOPER_DISPLAY_NAME', 'the developer'),
         'developer_tip_enabled': bool(app.config.get('STRIPE_SECRET_KEY')),
     }
@@ -1393,6 +1454,12 @@ def public_product_checkout(username, product_id):
     product = Product.query.filter_by(
         id=product_id, owner_id=seller.id, active=True, is_public=True
     ).first_or_404()
+    buyer = g.store_customer
+    if buyer is None:
+        flash('Create or sign in to a buyer account before purchasing.', 'error')
+        return redirect(url_for(
+            'login', next=url_for('seller_store', username=seller.username)
+        ))
     try:
         quantity_value = Decimal(request.form.get('quantity', '1'))
         if not quantity_value.is_finite() or quantity_value != quantity_value.to_integral_value():
@@ -1492,11 +1559,10 @@ def public_product_checkout(username, product_id):
         flash('This item does not have a payable price yet.', 'error')
         return redirect(url_for('seller_store', username=seller.username))
 
-    buyer = g.store_customer
-    crm_customer = _sales_customer_for_buyer(seller.id, buyer.email, buyer.display_name) if buyer else None
+    crm_customer = _sales_customer_for_buyer(seller.id, buyer.email, buyer.display_name)
     sale = Sale(
         owner_id=seller.id,
-        store_customer_id=buyer.id if buyer else None,
+        store_customer_id=buyer.id,
         customer_id=crm_customer.id if crm_customer else None,
         sale_date=datetime.utcnow(), sale_category=product.category.name if product.category else None,
         status='Waiting on Payment', paid=False, total_amount=total,
@@ -1524,17 +1590,23 @@ def public_product_checkout(username, product_id):
     db.session.commit()
 
     try:
-        checkout = stripe.checkout.Session.create(
-            mode='payment',
-            line_items=line_items,
-            customer_email=buyer.email if buyer else None,
-            client_reference_id=str(sale.id),
-            metadata={'sale_id': str(sale.id), 'seller_id': str(seller.id)},
-            payment_intent_data={'transfer_data': {'destination': seller.stripe_account_id}},
-            success_url=f"{url_for('checkout_success', _external=True)}?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=url_for('checkout_cancel', username=seller.username, _external=True),
-            api_key=app.config['STRIPE_SECRET_KEY'],
-        )
+        checkout_args = {
+            'mode': 'payment',
+            'line_items': line_items,
+            'customer_email': buyer.email,
+            'client_reference_id': str(sale.id),
+            'metadata': {'sale_id': str(sale.id), 'seller_id': str(seller.id)},
+            'payment_intent_data': {'transfer_data': {'destination': seller.stripe_account_id}},
+            'success_url': f"{url_for('checkout_success', _external=True)}?session_id={{CHECKOUT_SESSION_ID}}",
+            'cancel_url': url_for('checkout_cancel', username=seller.username, _external=True),
+            'api_key': app.config['STRIPE_SECRET_KEY'],
+        }
+        if product.requires_delivery:
+            checkout_args['shipping_address_collection'] = {
+                'allowed_countries': app.config['STRIPE_SHIPPING_ALLOWED_COUNTRIES'],
+            }
+            checkout_args['phone_number_collection'] = {'enabled': True}
+        checkout = stripe.checkout.Session.create(**checkout_args)
         sale.stripe_checkout_session_id = checkout.id
         db.session.commit()
         return redirect(checkout.url, code=303)
@@ -1769,7 +1841,7 @@ def product_new():
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_new'))
-        p=Product(owner_id=g.creator.id, name=request.form['name'], description=request.form.get('description'), base_price=money(request.form.get('base_price')) if base_price_enabled else 0, base_price_enabled=base_price_enabled, quantity_label=quantity_label, category_id=category.id if category else None, is_public=request.form.get('is_public', '1') == '1')
+        p=Product(owner_id=g.creator.id, name=request.form['name'], description=request.form.get('description'), base_price=money(request.form.get('base_price')) if base_price_enabled else 0, base_price_enabled=base_price_enabled, quantity_label=quantity_label, requires_delivery=request.form.get('requires_delivery') == '1', category_id=category.id if category else None, is_public=request.form.get('is_public', '1') == '1')
         db.session.add(p); db.session.flush(); _save_product_children(p)
         db.session.commit(); flash('Product created.','success'); return redirect(url_for('products'))
     return render_template('products/form.html', product=None, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
@@ -1801,7 +1873,7 @@ def product_edit(id):
         if category_id and not category:
             flash('Choose a category from your account.', 'error')
             return redirect(url_for('product_edit', id=p.id))
-        p.name=request.form['name']; p.description=request.form.get('description'); p.base_price=money(request.form.get('base_price')) if base_price_enabled else 0; p.base_price_enabled=base_price_enabled; p.quantity_label=quantity_label; p.category_id=category.id if category else None; p.is_public=request.form.get('is_public') == '1'
+        p.name=request.form['name']; p.description=request.form.get('description'); p.base_price=money(request.form.get('base_price')) if base_price_enabled else 0; p.base_price_enabled=base_price_enabled; p.quantity_label=quantity_label; p.requires_delivery=request.form.get('requires_delivery') == '1'; p.category_id=category.id if category else None; p.is_public=request.form.get('is_public') == '1'
         ProductField.query.filter_by(product_id=p.id).delete(); ProductAddon.query.filter_by(product_id=p.id).delete(); ProductBundle.query.filter_by(product_id=p.id).delete()
         _save_product_children(p); db.session.commit(); flash('Product updated.','success'); return redirect(url_for('products'))
     return render_template('products/form.html', product=p, categories=Category.query.filter_by(owner_id=g.creator.id).order_by(Category.name).all())
@@ -1969,6 +2041,7 @@ def sales():
     )) + (sort != 'created_desc')
     sale_query = sale_query.options(
         joinedload(Sale.customer),
+        joinedload(Sale.store_customer),
         selectinload(Sale.items).joinedload(SaleItem.product).joinedload(Product.category),
         selectinload(Sale.items).joinedload(SaleItem.product).selectinload(Product.tags),
         selectinload(Sale.items).joinedload(SaleItem.bundle),

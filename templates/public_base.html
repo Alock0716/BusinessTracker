@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{% block title %}Business Tracker{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 <body class="public-site">
     <header class="public-header">
@@ -31,14 +32,29 @@
     {% with messages=get_flashed_messages(with_categories=true) %}
         {% for category,message in messages %}<div class="public-flash flash {{category}}">{{message}}</div>{% endfor %}
     {% endwith %}
+    {% if current_store_customer and show_buyer_tip_banner %}
+    <aside class="buyer-tip-banner" data-remaining-ms="{{buyer_tip_banner_remaining_ms}}" aria-label="Tip the developer">
+        <div class="buyer-tip-banner-heading"><strong>Tip the developer</strong><button type="button" class="icon-button" aria-label="Dismiss tip banner" onclick="this.closest('.buyer-tip-banner').querySelector('.buyer-tip-dismiss-form').requestSubmit()">×</button></div>
+        {% set developer_return_to = 'storefront' %}
+        {% set developer_show_contact = false %}
+        {% include 'developer_support.html' %}
+        <form method="post" action="{{url_for('store_customer_tip_banner_dismiss')}}" class="buyer-tip-dismiss-form"></form>
+    </aside>
+    <script>
+    document.querySelectorAll('.buyer-tip-banner').forEach((banner) => {
+        window.setTimeout(() => { banner.hidden = true; }, Number(banner.dataset.remainingMs));
+    });
+    </script>
+    {% endif %}
     <main class="public-main">{% block content %}{% endblock %}</main>
     <footer class="public-footer">
         <a href="{{url_for('storefront')}}">Browse menus and leaderboards</a>
-        <details class="developer-tip-disclosure">
-            <summary>Tip the developer</summary>
+        <section class="public-footer-tip" aria-label="Tip the developer">
+            <h2>Tip the developer</h2>
             {% set developer_return_to = 'storefront' %}
+            {% set developer_show_contact = false %}
             {% include 'developer_support.html' %}
-        </details>
+        </section>
     </footer>
     <script src="{{url_for('static', filename='js/app.js')}}"></script>
 </body>

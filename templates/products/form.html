@@ -13,6 +13,7 @@
   <label>Description<textarea name="description">{{product.description if product else ''}}</textarea></label>
   <label>Product tags<input name="tags" maxlength="500" value="{{(product.tags|map(attribute='name')|join(', ')) if product else ''}}" placeholder="e.g. Digital, Rush, Commission"><span class="muted">Separate tags with commas. Use these to find products and related sales.</span></label>
   <label class="check visibility-toggle"><input type="checkbox" name="is_public" value="1" {% if not product or product.is_public %}checked{% endif %}> Show on public storefront</label>
+  <label class="check visibility-toggle"><input type="checkbox" name="requires_delivery" value="1" {% if product and product.requires_delivery %}checked{% endif %}> Physical item: collect delivery address at Stripe checkout</label>
 
   <h2>Trackable Items</h2>
   <p class="muted">Capture details that vary for each sale item, such as size, measurements, project codes, or appointment dates. These values are saved with the sale and can be searched in the sales dashboard.</p>
