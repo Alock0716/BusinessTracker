@@ -11,7 +11,7 @@
     {% endif %}
     <form method="post" action="{{url_for('developer_tip_checkout')}}" class="developer-tip-form">
         <input type="hidden" name="return_to" value="{{developer_return_to|default('storefront')}}">
-        <label><span>Tip Amount ($):</span><input type="number" name="amount" min="1" max="1000" step="1" value="5" required></label>
+        <label><span class="hidden">Tip amount in dollars</span><span class="tip-currency-input"><span aria-hidden="true">$</span><input type="number" name="amount" min="1" max="1000" step="1" value="5" inputmode="numeric" aria-label="Tip amount in dollars" required></span></label>
         <button class="button" type="submit" {% if not developer_tip_enabled %}disabled{% endif %}>Continue to Stripe</button>
         {% if not developer_tip_enabled %}<small class="muted">Tips are temporarily unavailable.</small>{% endif %}
     </form>

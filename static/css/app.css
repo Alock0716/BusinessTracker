@@ -1538,7 +1538,8 @@ nav a:hover {
 .auto-products-label select {
   min-height: 130px;
 }
-.leaderboard-fields > label.leaderboard-visibility {
+.leaderboard-fields > label.leaderboard-visibility,
+.auto-leaderboard-fields > label.leaderboard-visibility {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1549,7 +1550,8 @@ nav a:hover {
   background: #f7faf8;
   cursor: pointer;
 }
-.leaderboard-fields > .leaderboard-visibility input[type="checkbox"] {
+.leaderboard-fields > .leaderboard-visibility input[type="checkbox"],
+.auto-leaderboard-fields > .leaderboard-visibility input[type="checkbox"] {
   position: relative;
   flex: 0 0 42px;
   width: 42px !important;
@@ -1564,7 +1566,8 @@ nav a:hover {
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease;
 }
-.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]::before {
+.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]::before,
+.auto-leaderboard-fields > .leaderboard-visibility input[type="checkbox"]::before {
   position: absolute;
   top: 3px;
   left: 3px;
@@ -1576,14 +1579,17 @@ nav a:hover {
   content: "";
   transition: transform 140ms ease;
 }
-.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked {
+.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked,
+.auto-leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked {
   border-color: #287c65;
   background: #287c65;
 }
-.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked::before {
+.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked::before,
+.auto-leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:checked::before {
   transform: translateX(18px);
 }
-.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:focus-visible {
+.leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:focus-visible,
+.auto-leaderboard-fields > .leaderboard-visibility input[type="checkbox"]:focus-visible {
   outline: 3px solid rgb(40 124 101 / 28%);
   outline-offset: 2px;
 }
@@ -2968,7 +2974,10 @@ nav a:hover {
   position: static;
   inset: auto;
   display: grid;
-  gap: 8px;
+  grid-template-columns: max-content 150px max-content minmax(0, 1fr) 32px;
+  grid-template-areas: "heading amount submit status dismiss";
+  align-items: center;
+  column-gap: 10px;
   width: min(1132px, calc(100% - 48px));
   max-width: none;
   height: auto;
@@ -2983,26 +2992,23 @@ nav a:hover {
 }
 .buyer-tip-banner[hidden] { display: none; }
 .buyer-tip-banner-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: contents;
 }
-.buyer-tip-banner-heading strong { color: #183c32; }
+.buyer-tip-banner-heading strong { grid-area: heading; color: #183c32; white-space: nowrap; }
 .buyer-tip-banner .developer-support-content {
-  max-width: none;
-  margin-top: 0;
+  display: contents;
 }
 .buyer-tip-banner .developer-support-content > p { display: none; }
 .buyer-tip-banner .muted { color: #183c32; }
-.buyer-tip-banner .developer-tip-form { align-items: end; }
-.buyer-tip-banner .developer-tip-form label { color: #183c32; }
+.buyer-tip-banner .developer-tip-form { display: contents; }
+.buyer-tip-banner .developer-tip-form label { grid-area: amount; display: block; min-width: 0; margin: 0; color: #183c32; }
 .buyer-tip-banner .developer-tip-form input {
   color: #20242b;
   background: #fff;
   border-color: #899b94;
 }
-.buyer-tip-banner .developer-tip-form button { color: #fff; }
+.buyer-tip-banner .developer-tip-form button { grid-area: submit; min-height: 38px; color: #fff; white-space: nowrap; }
+.buyer-tip-banner .developer-tip-form small { grid-area: status; justify-self: end; white-space: nowrap; }
 .buyer-tip-banner .developer-tip-form button:disabled {
   opacity: 1;
   background: #586b64;
@@ -3010,6 +3016,7 @@ nav a:hover {
 }
 .buyer-tip-dismiss-form { display: none; }
 .buyer-tip-banner .icon-button {
+  grid-area: dismiss;
   width: 32px;
   height: 32px;
   border: 1px solid #9dbbb0;
@@ -3044,6 +3051,33 @@ nav a:hover {
   border-radius: 6px;
   font: inherit;
 }
+.tip-currency-input {
+  display: flex;
+  align-items: center;
+  width: 150px;
+  min-height: 38px;
+  overflow: hidden;
+  border: 1px solid #d7dbe2;
+  border-radius: 6px;
+  background: #fff;
+}
+.tip-currency-input > span {
+  padding: 0 0 0 10px;
+  color: #59616d;
+  font-weight: 700;
+}
+.tip-currency-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.tip-currency-input input:focus { outline-offset: -2px; }
+.buyer-tip-banner .tip-currency-input { border-color: #899b94; }
+.buyer-tip-banner .tip-currency-input > span { color: #183c32; }
+.public-footer-tip .tip-currency-input { width: 100%; }
+.public-footer-tip .tip-currency-input input { width: 100%; }
 .developer-tip-form button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -3087,7 +3121,16 @@ nav a:hover {
   .public-footer-tip .developer-tip-form label {
     grid-column: 1 / -1;
   }
-  .buyer-tip-banner { width: calc(100% - 24px); }
+  .buyer-tip-banner {
+    width: calc(100% - 24px);
+    grid-template-columns: minmax(0, 1fr) 32px;
+    grid-template-areas:
+      "heading dismiss"
+      "amount amount"
+      "submit status";
+  }
+  .buyer-tip-banner .developer-tip-form button { justify-self: start; }
+  .buyer-tip-banner .developer-tip-form small { justify-self: end; white-space: normal; }
 }
 .public-purchase-details {
   margin-top: 12px;
