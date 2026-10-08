@@ -22,18 +22,19 @@
 		</form>
 		{% endif %}
 		<nav>
-			{% if current_creator and current_creator.is_admin %}<a href="{{url_for('admin_dashboard')}}">Admin</a>{% endif %}
+			{% if current_creator and current_creator.is_admin %}<a href="{{url_for('admin_dashboard')}}">Admin</a><a href="{{url_for('admin_feedback')}}">Feedback Dashboard</a>{% endif %}
 			<a href="{{url_for('dashboard')}}">Dashboard</a>
 			<a href="{{url_for('products')}}">Products</a>
 			<a href="{{url_for('sales')}}">Sales</a>
-			<a href="{{url_for('service_subscriptions')}}">Subscriptions</a>
+			<a href="{{url_for('service_subscriptions')}}">Customer Subscriptions</a>
 			<a href="{{url_for('notifications')}}">Notifications{% if unread_notifications %} ({{unread_notifications|length}}){% endif %}</a>
 			<a href="{{url_for('customers')}}">Customers</a>
 			<a href="{{url_for('leaderboards')}}">Leaderboards</a>
 			<a href="{{url_for('analytics')}}">Analytics</a>
 			<a href="{{url_for('settings')}}">Settings</a>
 			<a href="{{url_for('account_settings')}}">Account</a>
-			{% if current_creator and not current_creator.is_admin %}<a href="{{url_for('seller_billing')}}">Subscription</a>{% endif %}
+			{% if current_creator and not current_creator.is_admin %}<a href="{{url_for('seller_billing')}}">Solara Plan &amp; Billing</a>{% endif %}
+<a href="{{url_for('seller_feedback')}}">Feedback</a>
 		</nav>
 		<a class="logout-link" href="{{ url_for('logout') }}">Sign out</a>
 		<a class="customer-site-link" href="{{url_for('storefront')}}">Customer Site</a>

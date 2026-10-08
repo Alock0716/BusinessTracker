@@ -310,3 +310,19 @@ class SellerNotification(db.Model):
         db.Index('ix_notification_owner_read_created', 'owner_id', 'read_at', 'created_at'),
         db.Index('ix_notification_service_subscription', 'service_subscription_id'),
     )
+
+class Suggestion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('creator_account.id', ondelete='SET NULL'))
+    feedback_type = db.Column(db.String(100), nullable=False, default='suggestion')
+    subject = db.Column(db.String(160), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='new')
+    admin_notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    __table_args__ = (
+        db.Index('ix_suggestion_status_created', 'status', 'created_at'),
+        db.Index('ix_suggestion_user', 'user_id'),
+    )
+    user = db.relationship('CreatorAccount')

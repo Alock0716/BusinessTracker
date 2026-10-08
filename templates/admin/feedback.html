@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Feedback Dashboard{% endblock %}
+{% block heading %}Feedback Dashboard{% endblock %}
+{% block content %}
+<section class="cards sales-summary">
+    {% for s in statuses %}<div><small>{{s|replace('_',' ')|capitalize}}</small><strong>{{counts.get(s, 0)}}</strong></div>{% endfor %}
+</section>
+<section class="panel">
+    <form method="get" class="admin-user-filters">
+        <label>Status<select name="status"><option value="">All</option>{% for s in statuses %}<option value="{{s}}" {{'selected' if status == s else ''}}>{{s|replace('_',' ')|capitalize}}</option>{% endfor %}</select></label>
+        <div><button class="button">Filter</button> <a class="button secondary" href="{{url_for('admin_feedback')}}">Clear</a></div>
+    </form>
+    {% for s in suggestions %}
+    <article class="panel">
+        <h3>{{s.subject}} <small class="muted">({{s.feedback_type|capitalize}})</small></h3>
+        <small class="muted">From {{(s.user.display_name or s.user.username) if s.user else 'deleted account'}} &middot; {{s.created_at.strftime('%b %d, %Y at %I:%M %p')}}</small>
+        <p>{{s.message}}</p>
+        <form method="post" action="{{url_for('admin_feedback_update', id=s.id)}}" class="form">
+            <input type="hidden" name="filter" value="{{status}}">
+            <label>Status<select name="status">{% for st in statuses %}<option value="{{st}}" {{'selected' if s.status == st else ''}}>{{st|replace('_',' ')|capitalize}}</option>{% endfor %}</select></label>
+            <label>Admin notes (visible to the seller)<textarea name="admin_notes" rows="2" maxlength="5000">{{s.admin_notes or ''}}</textarea></label>
+            <button class="button">Save</button>
+        </form>
+        <form method="post" action="{{url_for('admin_feedback_delete', id=s.id)}}" onsubmit="return confirm('Delete this feedback?')"><button class="button secondary">Delete</button></form>
+    </article>
+    {% else %}<p class="muted">No feedback found.</p>{% endfor %}
+    <div class="actions">{% if previous_url %}<a class="button secondary" href="{{previous_url}}">Previous</a>{% endif %}{% if next_url %}<a class="button secondary" href="{{next_url}}">Next</a>{% endif %}</div>
+</section>
+{% endblock %}

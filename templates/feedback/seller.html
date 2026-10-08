@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Feedback{% endblock %}
+{% block heading %}Feedback{% endblock %}
+{% block content %}
+<section class="panel account-settings-panel">
+    <h2>Send feedback</h2>
+    <p class="muted">Share a suggestion, report a problem, or ask a question. An administrator will review it.</p>
+    <form method="post" class="form account-settings-form">
+        <label>Type<select name="feedback_type">{% for t in types %}<option value="{{t}}">{{t|capitalize}}</option>{% endfor %}</select></label>
+        <label>Subject<input name="subject" maxlength="160" required></label>
+        <label>Message<textarea name="message" rows="6" maxlength="5000" required></textarea></label>
+        <button class="button">Submit feedback</button>
+    </form>
+</section>
+<section class="panel">
+    <h2>Your submissions</h2>
+    {% if suggestions %}
+    <ul class="notification-list">
+        {% for s in suggestions %}
+        <li class="notification-item">
+            <div>
+                <strong>{{s.subject}}</strong> <small>({{s.feedback_type|capitalize}} &middot; {{s.status|replace('_',' ')|capitalize}})</small>
+                <p>{{s.message}}</p>
+                {% if s.admin_notes %}<p><em>Admin response:</em> {{s.admin_notes}}</p>{% endif %}
+                <small>{{s.created_at.strftime('%b %d, %Y at %I:%M %p')}}</small>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}<p class="muted">You haven't submitted any feedback yet.</p>{% endif %}
+</section>
+{% endblock %}

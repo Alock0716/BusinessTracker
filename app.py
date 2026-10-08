@@ -25,7 +25,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from werkzeug.security import check_password_hash, generate_password_hash
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from config import Config
-from models import db, CreatorAccount, StoreCustomer, SellerNotification, Category, Platform, PaymentMethod, Customer, Leaderboard, LeaderboardEntry, Product, ProductTag, ProductField, ProductAddon, ProductBundle, ServiceSubscription, Sale, SaleItem, SaleItemField, SaleItemAddon
+from models import db, CreatorAccount, StoreCustomer, SellerNotification, Category, Platform, PaymentMethod, Customer, Leaderboard, LeaderboardEntry, Product, ProductTag, ProductField, ProductAddon, ProductBundle, ServiceSubscription, Sale, SaleItem, SaleItemField, SaleItemAddon, Suggestion
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -45,7 +45,7 @@ PUBLIC_ENDPOINTS = {
 SALE_STATUSES = ('New', 'In Progress', 'Not Started', 'On-Hold', 'Waiting on Payment', 'Canceled', 'Completed')
 ACTIVE_SUBSCRIPTION_STATUSES = ('active', 'trialing')
 BILLING_ACCESS_ENDPOINTS = {
-    'seller_billing', 'seller_billing_checkout', 'seller_billing_portal', 'account_settings',
+    'seller_billing', 'seller_billing_checkout', 'seller_billing_portal', 'account_settings', 'seller_feedback',
 }
 
 def _seller_subscription_access():
@@ -1661,6 +1661,65 @@ def admin_dashboard():
         previous_url=previous_url, next_url=next_url,
     )
 
+SUGGESTION_STATUSES = ('new', 'opened', 'in_progress', 'completed', 'rejected')
+SUGGESTION_TYPES = ('suggestion', 'bug', 'question', 'praise', 'other')
+
+@app.route('/feedback', methods=['GET', 'POST'])
+def seller_feedback():
+    if request.method == 'POST':
+        feedback_type = request.form.get('feedback_type', 'suggestion')
+        subject = request.form.get('subject', '').strip()
+        message = request.form.get('message', '').strip()
+        if feedback_type not in SUGGESTION_TYPES:
+            feedback_type = 'other'
+        if not subject or not message:
+            flash('Enter a subject and a message.', 'error')
+        elif len(subject) > 160 or len(message) > 5000:
+            flash('Subject must be 160 characters or fewer and message 5000 or fewer.', 'error')
+        else:
+            db.session.add(Suggestion(user_id=g.creator.id, feedback_type=feedback_type, subject=subject, message=message))
+            db.session.commit()
+            flash('Thanks! Your feedback was submitted.', 'success')
+            return redirect(url_for('seller_feedback'))
+    rows = Suggestion.query.filter_by(user_id=g.creator.id).order_by(Suggestion.created_at.desc()).limit(50).all()
+    return render_template('feedback/seller.html', suggestions=rows, types=SUGGESTION_TYPES)
+
+@app.route('/admin/feedback')
+def admin_feedback():
+    status = request.args.get('status', '')
+    query = Suggestion.query
+    if status in SUGGESTION_STATUSES:
+        query = query.filter(Suggestion.status == status)
+    pagination = query.order_by(Suggestion.created_at.desc()).paginate(
+        page=max(request.args.get('page', 1, type=int), 1), per_page=25, error_out=False
+    )
+    counts = dict(db.session.query(Suggestion.status, func.count(Suggestion.id)).group_by(Suggestion.status).all())
+    filters = {k: v for k, v in request.args.items() if k != 'page'}
+    return render_template(
+        'admin/feedback.html', pagination=pagination, suggestions=pagination.items, status=status,
+        statuses=SUGGESTION_STATUSES, counts=counts,
+        previous_url=url_for('admin_feedback', **filters, page=pagination.prev_num) if pagination.has_prev else None,
+        next_url=url_for('admin_feedback', **filters, page=pagination.next_num) if pagination.has_next else None,
+    )
+
+@app.route('/admin/feedback/<int:id>', methods=['POST'])
+def admin_feedback_update(id):
+    suggestion = db.get_or_404(Suggestion, id)
+    status = request.form.get('status', '')
+    if status not in SUGGESTION_STATUSES:
+        abort(400)
+    suggestion.status = status
+    suggestion.admin_notes = request.form.get('admin_notes', '').strip()[:5000] or None
+    db.session.commit()
+    flash('Feedback updated.', 'success')
+    return redirect(url_for('admin_feedback', status=request.form.get('filter') if request.form.get('filter') in SUGGESTION_STATUSES else None))
+
+@app.route('/admin/feedback/<int:id>/delete', methods=['POST'])
+def admin_feedback_delete(id):
+    db.session.delete(db.get_or_404(Suggestion, id))
+    db.session.commit()
+    flash('Feedback deleted.', 'success')
+    return redirect(url_for('admin_feedback'))
 @app.route('/admin/users/<int:id>/approval', methods=['POST'])
 def admin_user_approval(id):
     account = CreatorAccount.query.get_or_404(id)
