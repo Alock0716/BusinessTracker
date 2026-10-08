@@ -3216,7 +3216,7 @@ def seller_billing():
                 pending_checkout_url = pending_checkout.url
             elif pending_checkout.get('status') == 'expired':
                 _expire_subscription_checkout(pending_checkout)
-        except stripe.StripeError:
+        except Exception:
             logging.exception('Could not retrieve pending subscription checkout')
     return render_template(
         'settings/billing.html', account=account,
