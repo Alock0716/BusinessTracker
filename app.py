@@ -2576,7 +2576,7 @@ def sales():
         'status': Sale.status, 'paid': Sale.paid, 'total': Sale.total_amount,
     }, Sale.id)
     active_filter_count = sum(bool(value) for value in (
-        query, status_filter, paid_filter, category_filter, product_type_id,
+        status_filter, paid_filter, category_filter, product_type_id,
         product_tag_id, addon_id, bundle_id, field_id, has_addons_filter, due_state_filter,
     ))
     sale_query = sale_query.options(

@@ -11,13 +11,16 @@
 	<div><small>Not paid</small><strong>{{summary.unpaid}}</strong></div>
 </section>
 <section class="panel sales-filter-panel">
+	<form method="get" action="{{url_for('sales')}}" class="sales-filters">
+		<label class="sales-search">Search
+			<input type="search" name="q" value="{{query}}" placeholder="Customer, product, category, bundle, add-on, or field">
+		</label> 
+		<button class="button">Search</button>
+	</form>
 	<details class="sales-filter-disclosure" {% if active_filter_count %}open{% endif %}>
 		<summary><span>Search and filters</span><span class="sales-filter-count">{{active_filter_count ~ ' active' if active_filter_count else 'Open options'}}</span></summary>
 	<form method="get" action="{{url_for('sales')}}" class="sales-filters">
 		{% if sort_key %}<input type="hidden" name="sort" value="{{sort_key}}"><input type="hidden" name="dir" value="{{sort_dir}}">{% endif %}
-		<label class="sales-search">Search
-			<input type="search" name="q" value="{{query}}" placeholder="Customer, product, category, bundle, add-on, or field">
-		</label>
 		<label>Status
 			<select name="status"><option value="">All statuses</option>{% for option in sale_statuses %}<option value="{{option}}" {{'selected' if status_filter == option else ''}}>{{option}}</option>{% endfor %}</select>
 		</label>

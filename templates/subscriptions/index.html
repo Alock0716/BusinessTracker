@@ -11,11 +11,14 @@
     <div><small>Ended</small><strong>{{status_counts.get('canceled', 0) + status_counts.get('expired', 0)}}</strong></div>
 </section>
 <section class="panel subscription-list-panel">
-    <details class="sales-filter-disclosure" {% if query_text or status_filter or period_filter %}open{% endif %}>
+    <form method="get" action="{{url_for('service_subscriptions')}}" class="sales-filters">
+        <label class="sales-search">Search<input type="search" name="q" value="{{query_text}}" placeholder="Customer, service, or notes"></label>
+        <button class="button">Search</button>
+    </form>
+    <details class="sales-filter-disclosure" {% if status_filter or period_filter %}open{% endif %}>
         <summary><span>Search and filters</span><span class="sales-filter-count">{{pagination.total}} matching records</span></summary>
         <form method="get" action="{{url_for('service_subscriptions')}}" class="sales-filters">
             {% if sort_key %}<input type="hidden" name="sort" value="{{sort_key}}"><input type="hidden" name="dir" value="{{sort_dir}}">{% endif %}
-            <label class="sales-search">Search<input type="search" name="q" value="{{query_text}}" placeholder="Customer, service, or notes"></label>
             <label>Status<select name="status"><option value="">All statuses</option><option value="overdue" {{'selected' if status_filter == 'overdue' else ''}}>Overdue (active, past end)</option>{% for item in statuses %}<option value="{{item}}" {{'selected' if status_filter == item else ''}}>{{item|capitalize}}</option>{% endfor %}</select></label>
             <label>Period<select name="period"><option value="">Any period</option><option value="past" {{'selected' if period_filter == 'past' else ''}}>End date has passed</option><option value="future" {{'selected' if period_filter == 'future' else ''}}>End date has not passed</option><option value="mismatch" {{'selected' if period_filter == 'mismatch' else ''}}>Status and dates don't align</option></select></label>
             <div class="sales-filter-actions"><button class="button">Apply filters</button><a class="button secondary" href="{{url_for('service_subscriptions')}}">Clear</a></div>
