@@ -437,13 +437,28 @@ def _subscription_products(owner_id, include_inactive_id=None):
         Category.owner_id == owner_id, func.lower(Category.name) == 'subscriptions',
     ).order_by(Product.name).all()
 
+def _table_sort(options, id_column):
+    key = request.args.get('sort', '')
+    direction = request.args.get('dir', 'asc')
+    if key not in options:
+        key = ''
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
+    if not key:
+        return '', 'asc', (id_column.asc(),)
+    expression = options[key]
+    ordered = expression.desc().nullslast() if direction == 'desc' else expression.asc().nullslast()
+    return key, direction, (ordered, id_column.asc())
+
+def _page_url(endpoint, page):
+    return url_for(endpoint, **{**request.args.to_dict(), 'page': page})
+
 @app.route('/subscriptions')
 def service_subscriptions():
     today = date.today()
     status_filter = request.args.get('status', '')
     period_filter = request.args.get('period', '')
     query_text = request.args.get('q', '').strip()
-    sort = request.args.get('sort', 'status_asc')
     query = ServiceSubscription.query.options(
         joinedload(ServiceSubscription.customer), joinedload(ServiceSubscription.product),
     ).filter(ServiceSubscription.owner_id == g.creator.id)
@@ -482,16 +497,15 @@ def service_subscriptions():
         (ServiceSubscription.status == 'expired', 4),
         else_=5,
     )
-    sort_options = {
-        'status_asc': (status_order.asc(), ServiceSubscription.current_period_end.asc()),
-        'status_desc': (status_order.desc(), ServiceSubscription.current_period_end.desc()),
-        'end_asc': (ServiceSubscription.current_period_end.asc(), ServiceSubscription.id.desc()),
-        'end_desc': (ServiceSubscription.current_period_end.desc(), ServiceSubscription.id.desc()),
-        'start_desc': (ServiceSubscription.started_at.desc(), ServiceSubscription.id.desc()),
-    }
-    if sort not in sort_options:
-        sort = 'status_asc'
-    query = query.order_by(*sort_options[sort])
+    sort_key, sort_dir, sort_order = _table_sort({
+        'customer': db.session.query(Customer.name).filter(Customer.id == ServiceSubscription.customer_id).correlate(ServiceSubscription).scalar_subquery(),
+        'service': db.session.query(Product.name).filter(Product.id == ServiceSubscription.product_id).correlate(ServiceSubscription).scalar_subquery(),
+        'started': ServiceSubscription.started_at,
+        'end': ServiceSubscription.current_period_end,
+        'status': status_order,
+        'notes': ServiceSubscription.notes,
+    }, ServiceSubscription.id)
+    query = query.order_by(*sort_order)
     pagination = query.paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False,
     )
@@ -504,11 +518,11 @@ def service_subscriptions():
     early_inactive_count = ServiceSubscription.query.filter(
         ServiceSubscription.owner_id == g.creator.id, early_inactive_condition,
     ).count()
-    page_filters = {key: value for key, value in request.args.items() if key in {'q', 'status', 'period', 'sort'}}
+    page_filters = {key: value for key, value in request.args.items() if key in {'q', 'status', 'period', 'sort', 'dir'}}
     return render_template(
         'subscriptions/index.html', subscriptions=pagination.items,
         statuses=SERVICE_SUBSCRIPTION_STATUSES, status_filter=status_filter,
-        period_filter=period_filter, query_text=query_text, sort=sort,
+        period_filter=period_filter, query_text=query_text, sort_key=sort_key, sort_dir=sort_dir,
         pagination=pagination, status_counts=status_counts,
         overdue_count=overdue_count, early_inactive_count=early_inactive_count,
         previous_url=url_for('service_subscriptions', **{**page_filters, 'page': pagination.prev_num}) if pagination.has_prev else None,
@@ -2324,18 +2338,38 @@ def seller_availability():
 
 @app.route('/products')
 def products():
+    query_text = request.args.get('q', '').strip()
     products_query = Product.query.options(
         joinedload(Product.category), selectinload(Product.tags),
         selectinload(Product.fields), selectinload(Product.addons),
         selectinload(Product.bundles),
-    ).filter(Product.owner_id == g.creator.id).order_by(Product.name)
-    pagination = products_query.paginate(
+    ).filter(Product.owner_id == g.creator.id)
+    if query_text:
+        pattern = f'%{query_text}%'
+        products_query = products_query.filter(or_(
+            Product.name.ilike(pattern), Product.description.ilike(pattern),
+            Product.category.has(Category.name.ilike(pattern)),
+            Product.tags.any(ProductTag.name.ilike(pattern)),
+        ))
+    count_of = lambda model: db.session.query(func.count(model.id)).filter(
+        model.product_id == Product.id).correlate(Product).scalar_subquery()
+    sort_key, sort_dir, sort_order = _table_sort({
+        'name': func.lower(Product.name),
+        'category': db.session.query(func.lower(Category.name)).filter(Category.id == Product.category_id).correlate(Product).scalar_subquery(),
+        'price': Product.base_price,
+        'trackable': count_of(ProductField),
+        'addons': count_of(ProductAddon),
+        'options': count_of(ProductBundle),
+        'visibility': Product.is_public,
+    }, Product.id)
+    pagination = products_query.order_by(*sort_order).paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
     return render_template(
         'products/list.html', products=pagination.items, pagination=pagination,
-        previous_url=url_for('products', page=pagination.prev_num) if pagination.has_prev else None,
-        next_url=url_for('products', page=pagination.next_num) if pagination.has_next else None,
+        query_text=query_text, sort_key=sort_key, sort_dir=sort_dir,
+        previous_url=_page_url('products', pagination.prev_num) if pagination.has_prev else None,
+        next_url=_page_url('products', pagination.next_num) if pagination.has_next else None,
     )
 
 @app.route('/products/new', methods=['GET','POST'])
@@ -2460,7 +2494,6 @@ def sales():
     field_id = request.args.get('field', type=int)
     has_addons_filter = request.args.get('has_addons', '')
     due_state_filter = request.args.get('due_state', '')
-    sort = request.args.get('sort', 'created_desc')
 
     sale_query = Sale.query.filter(Sale.owner_id == g.creator.id)
     if query:
@@ -2533,22 +2566,19 @@ def sales():
         SaleItem.sale_id == Sale.id, Product.owner_id == g.creator.id
     ).order_by(Product.name).limit(1).scalar_subquery()
     sale_type = func.coalesce(Sale.sale_category, product_type_name)
-    sort_options = {
-        'created_asc': (Sale.created_at.asc(), Sale.id.asc()),
-        'created_desc': (Sale.created_at.desc(), Sale.id.desc()),
-        'due_asc': (Sale.due_date.asc().nullslast(), Sale.id.desc()),
-        'due_desc': (Sale.due_date.desc().nullslast(), Sale.id.desc()),
-        'type_asc': (sale_type.asc().nullslast(), Sale.id.desc()),
-        'type_desc': (sale_type.desc().nullslast(), Sale.id.desc()),
-        'price_asc': (Sale.total_amount.asc(), Sale.id.desc()),
-        'price_desc': (Sale.total_amount.desc(), Sale.id.desc()),
-    }
-    if sort not in sort_options:
-        sort = 'created_desc'
+    buyer_name = func.lower(func.coalesce(
+        db.session.query(Customer.name).filter(Customer.id == Sale.customer_id).correlate(Sale).scalar_subquery(),
+        db.session.query(StoreCustomer.display_name).filter(StoreCustomer.id == Sale.store_customer_id).correlate(Sale).scalar_subquery(),
+    ))
+    sort_key, sort_dir, sort_order = _table_sort({
+        'buyer': buyer_name, 'type': func.lower(sale_type),
+        'category': func.lower(Sale.sale_category), 'due': Sale.due_date,
+        'status': Sale.status, 'paid': Sale.paid, 'total': Sale.total_amount,
+    }, Sale.id)
     active_filter_count = sum(bool(value) for value in (
         query, status_filter, paid_filter, category_filter, product_type_id,
         product_tag_id, addon_id, bundle_id, field_id, has_addons_filter, due_state_filter,
-    )) + (sort != 'created_desc')
+    ))
     sale_query = sale_query.options(
         joinedload(Sale.customer),
         joinedload(Sale.store_customer),
@@ -2558,7 +2588,7 @@ def sales():
         selectinload(Sale.items).selectinload(SaleItem.addons).joinedload(SaleItemAddon.product_addon),
         selectinload(Sale.items).selectinload(SaleItem.fields).joinedload(SaleItemField.product_field),
     )
-    pagination = sale_query.order_by(*sort_options[sort]).paginate(
+    pagination = sale_query.order_by(*sort_order).paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
     previous_url = None
@@ -2614,7 +2644,7 @@ def sales():
         addon_filter=addon_id, bundle_filter=bundle_id,
         field_filter=field_id, has_addons_filter=has_addons_filter,
         due_state_filter=due_state_filter, active_filter_count=active_filter_count,
-        sort=sort, today=today,
+        sort_key=sort_key, sort_dir=sort_dir, today=today,
         previous_url=previous_url, next_url=next_url,
     )
 
@@ -2829,13 +2859,29 @@ def sale_paid_toggle(id):
 
 @app.route('/customers')
 def customers():
-    customers_query = db.session.query(Customer, func.count(Sale.id).label('purchase_count'),
-        func.coalesce(func.sum(Sale.total_amount), 0).label('total_spent'),
-        func.coalesce(func.avg(Sale.total_amount), 0).label('average_spent'),
-        func.max(Sale.sale_date).label('last_purchase')
+    purchase_count_expr = func.count(Sale.id)
+    total_spent_expr = func.coalesce(func.sum(Sale.total_amount), 0)
+    average_spent_expr = func.coalesce(func.avg(Sale.total_amount), 0)
+    last_purchase_expr = func.max(Sale.sale_date)
+    customer_search = request.args.get('q', '').strip()
+    customers_query = db.session.query(Customer, purchase_count_expr.label('purchase_count'),
+        total_spent_expr.label('total_spent'),
+        average_spent_expr.label('average_spent'),
+        last_purchase_expr.label('last_purchase')
     ).outerjoin(Sale, (Customer.id == Sale.customer_id) & (Sale.owner_id == g.creator.id)).filter(
         Customer.owner_id == g.creator.id
-    ).group_by(Customer.id).order_by(Customer.name)
+    ).group_by(Customer.id)
+    if customer_search:
+        pattern = f'%{customer_search}%'
+        customers_query = customers_query.filter(or_(
+            Customer.name.ilike(pattern), Customer.email.ilike(pattern),
+            Customer.username.ilike(pattern), Customer.contact_number.ilike(pattern),
+        ))
+    sort_key, sort_dir, sort_order = _table_sort({
+        'name': func.lower(Customer.name), 'purchases': purchase_count_expr,
+        'spent': total_spent_expr, 'average': average_spent_expr, 'last': last_purchase_expr,
+    }, Customer.id)
+    customers_query = customers_query.order_by(*sort_order)
     pagination = customers_query.paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
@@ -2878,9 +2924,9 @@ def customers():
     return render_template(
         'customers/list.html', customers=customer_stats, top_spender=top_spender,
         most_frequent=most_frequent, total_customers=pagination.total,
-        pagination=pagination,
-        previous_url=url_for('customers', page=pagination.prev_num) if pagination.has_prev else None,
-        next_url=url_for('customers', page=pagination.next_num) if pagination.has_next else None,
+        pagination=pagination, query_text=customer_search, sort_key=sort_key, sort_dir=sort_dir,
+        previous_url=_page_url('customers', pagination.prev_num) if pagination.has_prev else None,
+        next_url=_page_url('customers', pagination.next_num) if pagination.has_next else None,
     )
 
 @app.route('/customers/new', methods=['GET','POST'])
@@ -2910,10 +2956,23 @@ def customer_delete(id):
 
 @app.route('/leaderboards')
 def leaderboards():
-    boards_query = db.session.query(Leaderboard, func.count(LeaderboardEntry.id).label('entry_count')).outerjoin(
+    entry_count_expr = func.count(LeaderboardEntry.id)
+    query_text = request.args.get('q', '').strip()
+    boards_query = db.session.query(Leaderboard, entry_count_expr.label('entry_count')).outerjoin(
         LeaderboardEntry, Leaderboard.id == LeaderboardEntry.leaderboard_id
-    ).filter(Leaderboard.owner_id == g.creator.id).group_by(Leaderboard.id).order_by(Leaderboard.name)
-    pagination = boards_query.paginate(
+    ).filter(Leaderboard.owner_id == g.creator.id).group_by(Leaderboard.id)
+    if query_text:
+        pattern = f'%{query_text}%'
+        boards_query = boards_query.filter(or_(
+            Leaderboard.name.ilike(pattern), Leaderboard.description.ilike(pattern),
+            Leaderboard.score_label.ilike(pattern),
+        ))
+    sort_key, sort_dir, sort_order = _table_sort({
+        'name': func.lower(Leaderboard.name), 'participants': entry_count_expr,
+        'score': func.lower(Leaderboard.score_label), 'ranking': Leaderboard.sort_order,
+        'visibility': Leaderboard.is_public,
+    }, Leaderboard.id)
+    pagination = boards_query.order_by(*sort_order).paginate(
         page=max(request.args.get('page', 1, type=int), 1), per_page=50, error_out=False
     )
     products = Product.query.options(joinedload(Product.category)).filter_by(
@@ -2922,8 +2981,9 @@ def leaderboards():
     return render_template(
         'leaderboards/list.html', leaderboards=pagination.items, pagination=pagination,
         top_entries=_leaderboard_top_entries(pagination.items), products=products,
-        previous_url=url_for('leaderboards', page=pagination.prev_num) if pagination.has_prev else None,
-        next_url=url_for('leaderboards', page=pagination.next_num) if pagination.has_next else None,
+        query_text=query_text, sort_key=sort_key, sort_dir=sort_dir,
+        previous_url=_page_url('leaderboards', pagination.prev_num) if pagination.has_prev else None,
+        next_url=_page_url('leaderboards', pagination.next_num) if pagination.has_next else None,
     )
 
 @app.route('/leaderboards/new', methods=['POST'])

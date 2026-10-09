@@ -2,6 +2,7 @@
 {% block title %}Sales Dashboard{% endblock %}
 {% block heading %}Sales Dashboard{% endblock %}
 {% block content %}
+{% from '_table_sort.html' import sort_th with context %}
 <div class="sales-toolbar"><p class="muted">Track orders, deadlines, and payments in one place.</p><a class="button" href="{{url_for('sale_new')}}">+ Record Sale</a></div>
 <section class="cards sales-summary">
 	<div><small>Total sales</small><strong>{{summary.total}}</strong></div>
@@ -13,6 +14,7 @@
 	<details class="sales-filter-disclosure" {% if active_filter_count %}open{% endif %}>
 		<summary><span>Search and filters</span><span class="sales-filter-count">{{active_filter_count ~ ' active' if active_filter_count else 'Open options'}}</span></summary>
 	<form method="get" action="{{url_for('sales')}}" class="sales-filters">
+		{% if sort_key %}<input type="hidden" name="sort" value="{{sort_key}}"><input type="hidden" name="dir" value="{{sort_dir}}">{% endif %}
 		<label class="sales-search">Search
 			<input type="search" name="q" value="{{query}}" placeholder="Customer, product, category, bundle, add-on, or field">
 		</label>
@@ -43,18 +45,6 @@
 		<label>Trackable field
 			<select name="field"><option value="">Any field</option>{% for field in trackable_fields %}<option value="{{field.id}}" {{'selected' if field_filter == field.id else ''}}>{{field.product.name}} / {{field.name}}</option>{% endfor %}</select>
 		</label>
-		<label>Sort by
-			<select name="sort">
-				<option value="created_desc" {{'selected' if sort == 'created_desc' else ''}}>Created: newest</option>
-				<option value="created_asc" {{'selected' if sort == 'created_asc' else ''}}>Created: oldest</option>
-				<option value="due_asc" {{'selected' if sort == 'due_asc' else ''}}>Due date: soonest</option>
-				<option value="due_desc" {{'selected' if sort == 'due_desc' else ''}}>Due date: latest</option>
-				<option value="type_asc" {{'selected' if sort == 'type_asc' else ''}}>Type: A to Z</option>
-				<option value="type_desc" {{'selected' if sort == 'type_desc' else ''}}>Type: Z to A</option>
-				<option value="price_desc" {{'selected' if sort == 'price_desc' else ''}}>Price: high to low</option>
-				<option value="price_asc" {{'selected' if sort == 'price_asc' else ''}}>Price: low to high</option>
-			</select>
-		</label>
 		<label>Due status
 			<select name="due_state"><option value="">Any due date</option><option value="due_today" {{'selected' if due_state_filter == 'due_today' else ''}}>Due Today</option><option value="overdue" {{'selected' if due_state_filter == 'overdue' else ''}}>Overdue</option><option value="on_schedule" {{'selected' if due_state_filter == 'on_schedule' else ''}}>On Schedule</option></select>
 		</label>
@@ -66,13 +56,12 @@
 	<div class="sales-results-heading"><h2>Sales</h2><span class="muted">{{pagination.total}} result{{'' if pagination.total == 1 else 's'}}</span></div>
 	<div class="table-scroll">
 		<table class="sales-table">
-			<thead><tr><th>Sale</th><th>Buyer</th><th>Items / type</th><th>Category</th><th>Due</th><th>Status</th><th>Payment</th><th>Total</th><th>Actions</th></tr></thead>
+			<thead><tr>{{sort_th('Buyer','buyer')}}{{sort_th('Items / type','type')}}{{sort_th('Category','category')}}{{sort_th('Due','due')}}{{sort_th('Status','status')}}{{sort_th('Payment','paid')}}{{sort_th('Total','total')}}<th>Actions</th></tr></thead>
 			<tbody>
 				{% for s in sales %}
 				{% set product_type = namespace(name='') %}
 				{% for item in s.items %}{% if not product_type.name and item.product.category %}{% set product_type.name = item.product.category.name %}{% endif %}{% endfor %}
 				<tr>
-					<td><strong>#{{s.id}}</strong></td>
 					<td>
 						{% if s.customer %}<a href="{{url_for('customer_edit', id=s.customer.id)}}">{{s.customer.name}}</a>{% elif s.store_customer %}<strong>{{s.store_customer.display_name}}</strong>{% else %}—{% endif %}
 						{% if s.customer and s.customer.email %}<small class="muted sales-buyer-email">{{s.customer.email}}</small>{% elif s.store_customer %}<small class="muted sales-buyer-email">{{s.store_customer.email}}</small>{% endif %}
@@ -119,7 +108,7 @@
 					<td><strong>{{money(s.total_amount)}}</strong></td>
 					<td><div class="sales-row-actions"><a class="button secondary" href="{{url_for('sale_edit', id=s.id)}}">Edit</a><form method="post" action="{{url_for('sale_delete', id=s.id)}}" onsubmit="return confirm('Remove sale #{{s.id}}?')"><input type="hidden" name="version_id" value="{{s.version_id}}"><button class="button secondary danger">Delete</button></form></div></td>
 				</tr>
-				{% else %}<tr><td colspan="9" class="sales-empty">No sales match these filters.</td></tr>{% endfor %}
+				{% else %}<tr><td colspan="8" class="sales-empty">No sales match these filters.</td></tr>{% endfor %}
 			</tbody>
 		</table>
 	</div>

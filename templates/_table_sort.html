@@ -1,0 +1,14 @@
+{# Header cell that cycles asc -> desc -> off (default id order). Import with context. #}
+{% macro sort_th(label, key) %}
+{% set args = request.args.to_dict() %}
+{% set _ = args.pop('page', None) %}
+{% set active = sort_key == key %}
+{% if active and sort_dir == 'asc' %}
+{% set _ = args.update({'sort': key, 'dir': 'desc'}) %}
+{% elif active %}
+{% set _ = args.update({'sort': ''}) %}{% set _ = args.pop('dir', None) %}
+{% else %}
+{% set _ = args.update({'sort': key, 'dir': 'asc'}) %}
+{% endif %}
+<th class="sortable-th" aria-sort="{{ ('ascending' if sort_dir == 'asc' else 'descending') if active else 'none' }}"><a class="sort-link{{ ' is-active' if active else '' }}" href="{{ url_for(request.endpoint, **args) }}">{{ label }}<span class="sort-indicator" aria-hidden="true">{{ ('▲' if sort_dir == 'asc' else '▼') if active else '↕' }}</span></a></th>
+{% endmacro %}

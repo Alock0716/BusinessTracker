@@ -22,19 +22,33 @@
 		</form>
 		{% endif %}
 		<nav>
-			{% if current_creator and current_creator.is_admin %}<a href="{{url_for('admin_dashboard')}}">Admin</a><a href="{{url_for('admin_feedback')}}">Feedback Dashboard</a>{% endif %}
-			<a href="{{url_for('dashboard')}}">Dashboard</a>
-			<a href="{{url_for('products')}}">Products</a>
-			<a href="{{url_for('sales')}}">Sales</a>
-			<a href="{{url_for('service_subscriptions')}}">Customer Subscriptions</a>
+			{% set nav_path = request.path %}
+			{% set dash_links = [
+				(url_for('dashboard'), 'Main Dashboard', true),
+				(url_for('sales'), 'Sales', false),
+				(url_for('service_subscriptions'), 'Customer Subscriptions', false),
+				(url_for('leaderboards'), 'Leaderboards', false),
+				(url_for('products'), 'Products', false),
+				(url_for('customers'), 'Customers', false),
+				(url_for('analytics'), 'Analytics', false)] %}
+			{% set settings_links = [
+				(url_for('account_settings'), 'Account Settings', false),
+				(url_for('settings'), 'General Settings', true)] %}
+			{% if current_creator and not current_creator.is_admin %}{% set settings_links = settings_links + [(url_for('seller_billing'), 'Plan &amp; Billing', false)] %}{% endif %}
+			{% set admin_links = [(url_for('admin_dashboard'), 'Admin Dashboard', false), (url_for('admin_feedback'), 'Feedback Dashboard', false)] %}
+			{% macro nav_group(key, title, links) %}
+				{% set ns = namespace(open=false) %}
+				{% for url, label, exact in links %}{% if nav_path == url or (not exact and nav_path.startswith(url ~ '/')) %}{% set ns.open = true %}{% endif %}{% endfor %}
+				<details class="nav-group" data-nav-group="{{key}}" {% if ns.open %}open{% endif %}>
+					<summary>{{title}}</summary>
+					{% for url, label, exact in links %}<a href="{{url}}" {% if nav_path == url or (not exact and nav_path.startswith(url ~ '/')) %}aria-current="page"{% endif %}>{{label|safe}}</a>{% endfor %}
+				</details>
+			{% endmacro %}
+			{{ nav_group('dashboards', 'Dashboards', dash_links) }}
+			{{ nav_group('settings', 'Settings', settings_links) }}
+			{% if current_creator and current_creator.is_admin %}{{ nav_group('admin', 'Admin', admin_links) }}{% endif %}
 			<a href="{{url_for('notifications')}}">Notifications{% if unread_notifications %} ({{unread_notifications|length}}){% endif %}</a>
-			<a href="{{url_for('customers')}}">Customers</a>
-			<a href="{{url_for('leaderboards')}}">Leaderboards</a>
-			<a href="{{url_for('analytics')}}">Analytics</a>
-			<a href="{{url_for('settings')}}">Settings</a>
-			<a href="{{url_for('account_settings')}}">Account</a>
-			{% if current_creator and not current_creator.is_admin %}<a href="{{url_for('seller_billing')}}">Solara Plan &amp; Billing</a>{% endif %}
-<a href="{{url_for('seller_feedback')}}">Feedback</a>
+			<a href="{{url_for('seller_feedback')}}">Feedback</a>
 		</nav>
 		<a class="logout-link" href="{{ url_for('logout') }}">Sign out</a>
 		<a class="customer-site-link" href="{{url_for('storefront')}}">Customer Site</a>

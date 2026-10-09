@@ -1,16 +1,21 @@
 {% extends 'base.html' %}{% block title %}Products{% endblock %}{% block heading %}Products{% endblock %}{% block
-content %}<div class="toolbar"><a class="button" href="{{url_for('product_new')}}">+ New Product</a></div>
+content %}{% from '_table_sort.html' import sort_th with context %}<div class="toolbar"><a class="button" href="{{url_for('product_new')}}">+ New Product</a></div>
 <section class="panel">
+    <form method="get" action="{{url_for('products')}}" class="list-search" role="search">
+        {% if sort_key %}<input type="hidden" name="sort" value="{{sort_key}}"><input type="hidden" name="dir" value="{{sort_dir}}">{% endif %}
+        <input type="search" name="q" value="{{query_text}}" placeholder="Search products, descriptions, categories, or tags" aria-label="Search products">
+        <button class="button">Search</button>{% if query_text %}<a class="button secondary" href="{{url_for('products')}}">Clear</a>{% endif %}
+    </form>
     <div class="table-scroll">
     <table>
         <tr>
-            <th>Product</th>
-            <th>Category</th>
-            <th>Base Price</th>
-            <th>Trackable</th>
-            <th>Add-ons</th>
-            <th>Pricing Options</th>
-            <th>Visibility</th>
+            {{sort_th('Product','name')}}
+            {{sort_th('Category','category')}}
+            {{sort_th('Base Price','price')}}
+            {{sort_th('Trackable','trackable')}}
+            {{sort_th('Add-ons','addons')}}
+            {{sort_th('Pricing Options','options')}}
+            {{sort_th('Visibility','visibility')}}
             <th>Actions</th>
         </tr>{% for p in products %}<tr>
             <td><b>{{p.name}}</b><br><span class="muted">{{p.description or ''}}</span>{% if p.tags %}<div class="product-tag-list">{% for tag in p.tags %}<span>{{tag.name}}</span>{% endfor %}</div>{% endif %}</td>

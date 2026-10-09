@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}{{ 'Edit' if sale else 'Record' }} Sale{% endblock %}
-{% block heading %}{{ 'Edit' if sale else 'Record' }} Sale{% endblock %}
+{% block heading %}{{ 'Edit' if sale else 'Record' }} Sale{% if sale %} #{{ sale.id }}{% endif %}{% endblock %}
 {% block content %}
 <form method="post" class="panel form sale-form" id="saleForm">
   {% if sale %}<input type="hidden" name="version_id" value="{{sale.version_id}}">{% endif %}

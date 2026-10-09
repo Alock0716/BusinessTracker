@@ -2,6 +2,7 @@
 {% block title %}Leaderboards{% endblock %}
 {% block heading %}Leaderboards{% endblock %}
 {% block content %}
+{% from '_table_sort.html' import sort_th with context %}
 <div class="leaderboard-page">
     <section class="panel leaderboard-create">
         <h2>Create a leaderboard</h2>
@@ -27,9 +28,14 @@
     </section>
     <section class="panel leaderboard-list-panel">
         <h2>Your leaderboards</h2>
+        <form method="get" action="{{url_for('leaderboards')}}" class="list-search" role="search">
+            {% if sort_key %}<input type="hidden" name="sort" value="{{sort_key}}"><input type="hidden" name="dir" value="{{sort_dir}}">{% endif %}
+            <input type="search" name="q" value="{{query_text}}" placeholder="Search leaderboards" aria-label="Search leaderboards">
+            <button class="button">Search</button>{% if query_text %}<a class="button secondary" href="{{url_for('leaderboards')}}">Clear</a>{% endif %}
+        </form>
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Leaderboard</th><th>Participants</th><th>Top customer</th><th>Score</th><th>Ranking</th><th>Visibility</th></tr></thead>
+                <thead><tr>{{sort_th('Leaderboard','name')}}{{sort_th('Participants','participants')}}<th>Top customer</th>{{sort_th('Score','score')}}{{sort_th('Ranking','ranking')}}{{sort_th('Visibility','visibility')}}</tr></thead>
                 <tbody>
                     {% for board, entry_count in leaderboards %}
                     <tr>

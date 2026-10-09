@@ -136,6 +136,22 @@ nav a:hover {
   background: #262c39;
   color: white;
 }
+.nav-group { display: grid; gap: 4px; }
+.nav-group > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 700;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+}
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group > summary::after { content: "▾"; }
+.nav-group:not([open]) > summary::after { content: "▸"; }
+.nav-group > a { margin-left: 10px; }
+.nav-group > a[aria-current="page"] { background: rgba(255, 255, 255, 0.14); color: #fff; }
 main {
   margin-left: 230px;
   padding: 22px 24px;
@@ -3349,3 +3365,10 @@ nav a:hover {
   width: 100%;
   margin-top: 2px;
 }
+
+.list-search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.list-search input[type=search] { flex: 1 1 220px; min-width: 0; }
+.sort-link { color: inherit; text-decoration: none; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
+.sort-link:hover { text-decoration: underline; }
+.sort-indicator { font-size: 0.75em; opacity: 0.45; }
+.sort-link.is-active .sort-indicator { opacity: 1; }
