@@ -34,6 +34,7 @@ class Config:
     STRIPE_SELLER_PRICE_ID = os.environ.get('STRIPE_SELLER_PRICE_ID', '')
     DEVELOPER_CONTACT_EMAIL = os.environ.get('DEVELOPER_CONTACT_EMAIL', '').strip()
     DEVELOPER_CONTACT_NUMBER = os.environ.get('DEVELOPER_CONTACT_NUMBER', '').strip()
+    DEVELOPER_TWITTER_ACCOUNT = os.environ.get('DEVELOPER_TWITTER_ACCOUNT', '').strip()
     DEVELOPER_DISPLAY_NAME = os.environ.get('DEVELOPER_DISPLAY_NAME', 'the developer').strip()
     STRIPE_CONNECT_COUNTRY = os.environ.get('STRIPE_CONNECT_COUNTRY', 'US')
     STRIPE_SHIPPING_ALLOWED_COUNTRIES = [

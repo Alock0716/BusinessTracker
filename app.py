@@ -1459,6 +1459,9 @@ def helpers():
         buyer and not session.get('buyer_tip_banner_dismissed') and banner_remaining_seconds > 0
     )
     developer_contact_number = app.config.get('DEVELOPER_CONTACT_NUMBER', '').strip()
+    developer_twitter_handle = re.sub(r'^(https?://)?(www\.)?(twitter|x)\.com/', '', app.config.get('DEVELOPER_TWITTER_ACCOUNT', '').strip()).lstrip('@').strip('/')
+    if not re.fullmatch(r'\w{1,15}', developer_twitter_handle):
+        developer_twitter_handle = ''
     developer_contact_digits = re.sub(r'\D', '', developer_contact_number)
     developer_contact_tel = (
         f'+{developer_contact_digits}' if developer_contact_number.startswith('+')
@@ -1479,6 +1482,7 @@ def helpers():
         'developer_contact_email': app.config.get('DEVELOPER_CONTACT_EMAIL', ''),
         'developer_contact_number': developer_contact_number,
         'developer_contact_tel': developer_contact_tel,
+        'developer_twitter_handle': developer_twitter_handle,
         'developer_display_name': app.config.get('DEVELOPER_DISPLAY_NAME', 'the developer'),
         'developer_tip_enabled': bool(app.config.get('STRIPE_SECRET_KEY')),
     }
@@ -2784,7 +2788,7 @@ def _sale_form(sale):
         platforms=Platform.query.filter_by(owner_id=g.creator.id, active=True).all(), payments=PaymentMethod.query.filter_by(owner_id=g.creator.id, active=True).all(),
         product_data=_product_json(products), selected_items=selected_items, sale_categories=sale_categories,
         sale_statuses=SALE_STATUSES,
-        now=(sale.sale_date if sale else datetime.utcnow()).strftime('%Y-%m-%dT%H:%M'))
+        now=(sale.sale_date.strftime('%Y-%m-%dT%H:%M') if sale else datetime.utcnow().strftime('%Y-%m-%dT00:00')))
 
 @app.route('/sales/<int:id>/delete', methods=['POST'])
 def sale_delete(id):

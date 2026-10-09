@@ -2801,9 +2801,14 @@ nav a:hover {
   .public-intro {
     padding: 19px 16px;
   }
-  .browse-search-tools .public-search-form { grid-template-columns: minmax(0, 1fr) auto; }
-  .browse-search-tools .public-search-form input { grid-column: 1 / -1; }
-  .browse-search-tools .public-search-form select { grid-column: 1; }
+  .browse-search-tools .public-search-form {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "search"
+      "filter"
+      "submit";
+  }
+  .browse-search-tools .public-search-form .button { width: 100%; min-height: 42px; }
   .public-intro h1,
   .public-seller-heading h1 {
     font-size: 25px;
