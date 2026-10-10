@@ -36,4 +36,10 @@
     <p class="muted">Payments, invoices, and cancellation are handled securely by Stripe.</p>
     <a class="button secondary" href="{{url_for('account_settings')}}">Account settings</a>
 </section>
+<section class="panel developer-support-panel">
+	<h2>Support development</h2>
+	{% set developer_return_to = 'seller_billing' %}
+	{% set developer_show_contact = not current_creator.disable_content_contact %}
+	{% include 'developer_support.html' %}
+</section>
 {% endblock %}

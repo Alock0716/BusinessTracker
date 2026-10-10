@@ -33,8 +33,9 @@
 				(url_for('customers'), 'Customers', false),
 				(url_for('analytics'), 'Analytics', false)] %}
 			{% set settings_links = [
+				(url_for('settings'), 'General Settings', true),
 				(url_for('account_settings'), 'Account Settings', false),
-				(url_for('settings'), 'General Settings', true)] %}
+				(url_for('seller_billing'), 'Solara Plan & Billing', false) ] %}
 			{% if current_creator and not current_creator.is_admin %}{% set settings_links = settings_links + [(url_for('seller_billing'), 'Plan &amp; Billing', false)] %}{% endif %}
 			{% set admin_links = [(url_for('admin_dashboard'), 'Admin Dashboard', false), (url_for('admin_feedback'), 'Feedback Dashboard', false)] %}
 			{% macro nav_group(key, title, links) %}

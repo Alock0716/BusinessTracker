@@ -2,10 +2,10 @@
 {% block title %}Feedback{% endblock %}
 {% block heading %}Feedback{% endblock %}
 {% block content %}
-<section class="panel account-settings-panel">
+<section class="panel">
     <h2>Send feedback</h2>
     <p class="muted">Share a suggestion, report a problem, or ask a question. An administrator will review it.</p>
-    <form method="post" class="form account-settings-form">
+    <form method="post" class="form">
         <label>Type<select name="feedback_type">{% for t in types %}<option value="{{t}}">{{t|capitalize}}</option>{% endfor %}</select></label>
         <label>Subject<input name="subject" maxlength="160" required></label>
         <label>Message<textarea name="message" rows="6" maxlength="5000" required></textarea></label>
