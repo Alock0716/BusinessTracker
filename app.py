@@ -1611,9 +1611,9 @@ def _delete_creator_records(owner_id):
 
 def _admin_return_url():
     target = request.form.get('next', '')
-    return target if target == '/admin' or target.startswith('/admin?') else url_for('admin_dashboard')
+    return target if target == '/admin/dashboard' or target.startswith('/admin/dashboard?') else url_for('admin_dashboard')
 
-@app.route('/admin')
+@app.route('/admin/dashboard')
 def admin_dashboard():
     query = request.args.get('q', '').strip()
     status = request.args.get('status', '')
